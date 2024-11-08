@@ -1,7 +1,7 @@
 package main
 
 import (
-	"errors"
+	"fmt"
 	"reflect"
 )
 
@@ -12,12 +12,17 @@ type HostConfig struct {
 	Password string
 }
 
+type KubernetesConfig struct {
+	Namespace string `yaml:"namespace"`
+}
+
 type Location struct {
 	Host HostConfig
 }
 
 // findLocation принимает любую структуру и ищет в ней поле "Location".
-// Если находит, проверяет Host внутри Location и возвращает его, или ошибку, если поля не заполнены.
+// Если находит, проверяет Host внутри Location и возвращает его.
+// Если не находит, возвращает HostConfig с адресом "localhost" и портом 22.
 func findLocation(data interface{}) (*HostConfig, error) {
 	val := reflect.ValueOf(data)
 	// Проверка на указатель и получение исходного значения.
@@ -33,32 +38,33 @@ func findLocation(data interface{}) (*HostConfig, error) {
 		if hostField.IsValid() && hostField.Kind() == reflect.Struct {
 			hostConfig := hostField.Interface().(HostConfig)
 
-			// Проверка адреса
+			// Проверка наличия заполненного Address, Port, User и Password.
 			if hostConfig.Address == "" {
-				return nil, errors.New("адрес не указан")
+				hostConfig.Address = "localhost"
 			}
-
-			// Проверка и установка порта по умолчанию (22)
 			if hostConfig.Port == 0 {
 				hostConfig.Port = 22
 			}
-
-			// Проверка пользователя
 			if hostConfig.User == "" {
-				return nil, errors.New("пользователь не указан")
+				logMessage("WARN", "User не указан")
 			}
-
-			// Проверка пароля
 			if hostConfig.Password == "" {
-				return nil, errors.New("пароль не указан")
+				logMessage("WARN", "Password не указан")
 			}
 
+			logMessage("DEBUG", fmt.Sprintf("Location found - Host: %s", hostConfig.Address))
 			return &hostConfig, nil
 		} else {
-			return nil, errors.New("пустое поле - Host")
+			logMessage("ERROR", "Пустое поле - Host")
 		}
 	}
 
-	// Если Location или Host не найдены
-	return nil, errors.New("Location для подключения не найден")
+	// Если Location или Host не найдены, возвращаем localhost с портом 22.
+	logMessage("DEBUG", "Location for connection not found. Using localhost")
+	return &HostConfig{
+		Address:  "localhost",
+		Port:     22,
+		User:     "",
+		Password: "",
+	}, nil
 }
