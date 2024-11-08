@@ -1,0 +1,76 @@
+stage:
+- name: MDM # Уникальное имя этапа
+  desc: "Установка группы мдм" # Описание этапа
+  atomic: true # Флаг атомарности обновления всего этапа
+  pre_check: 
+    location:
+      host:
+        user: "admin"
+        address: localhost
+        port:
+        password: 1604
+    bash:
+      script: "/mnt/c/Users/admin/script.bat"
+  post_check: 
+    bash:
+      run: "cd /etc"
+  rollback: false
+  
+  # Начало описания шагов
+  step:  
+  - name: adapter # Уникальное имя шага
+    location: # Описаниен местодействия
+      # Если кубернетис
+      kuber: 
+        namespace: "Название неймспейса"
+        # Если хост
+      host:
+        user:
+        address:
+        port:
+        
+    desc: "Установка мдм-адаптера" # Описание этапа 
+    helm:
+      actions: upgrade
+      helm_dir: /data
+      release_name: mdm-adapter
+      version: 1.9.2
+    atomic: true # Флаг атомарности обновления
+    pre_check: 
+      bash:
+        path: /путь/к/скрипту
+    post_check: 
+      bash:
+        run: "cd /etc"
+    rollback: false
+
+  - name: repaptitioner
+    dependence: 
+      finish: MDM.adapter # Зависимость от завершения шага adapter в этапе MDM
+    yum:
+      actions: install
+      packet_name: mdm-adapter
+      version: 1.9.2
+      atomic: true
+
+- name: Assembler # Уникальное имя этапа
+  desc: "Установка группы сборщика" # Описание этапа 
+  step: # Начало описания шага 
+  - name: party # Уникальное имя шага
+    desc: "Установка мдм-адаптера" # Описание этапа 
+    helm:
+      actions: upgrade
+      helm_dir: /data
+      release_name: mdm-adapter
+      version: 1.9.2
+    atomic: true # Флаг атомарности обновления
+    rollback: false
+
+  - name: repaptitioner
+    dependence: 
+      finish: MDM.adapter # Зависимость от завершения шага adapter в этапе MDM
+    yum:
+      actions: install
+      packet_name: mdm-adapter
+      version: 1.9.2
+      atomic: true
