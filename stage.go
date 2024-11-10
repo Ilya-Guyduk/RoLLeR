@@ -1,7 +1,14 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+	"time"
 
+	"github.com/schollz/progressbar/v3"
+)
+
+// Stage представляет этап обработки с его параметрами.
 type Stage struct {
 	Name        string      `yaml:"name"`
 	Description string      `yaml:"desc"`
@@ -15,53 +22,60 @@ type Stage struct {
 	Steps       []Step      `yaml:"step"`
 }
 
-// Константа для атомарного обновления
 var ATOMIC_STAGE bool
 
+// processStage обрабатывает этап (Stage) с различными проверками и скриптами.
 func processStage(stage Stage) error {
+	fmt.Println("######################################################")
+	logMessage("INFO", fmt.Sprintf("Start stage: %s", stage.Name))
 
-	// Проверка наличия подписи
-	if stage.Description != "" {
-		logMessage("INFO", fmt.Sprintf("Desc: %s", stage.Description))
+	// Выводим описание, если оно есть
+	printDescription(stage.Description)
+
+	// Запуск прогресс-бара в горутине
+	bar := startProgressBar(len(stage.Steps), stage.Name)
+	defer bar.Close()
+
+	// Обрабатываем атомарный флаг
+	handleAtomicStage(stage.Atomic)
+
+	// Выполняем предварительные действия
+	if err := runPreActions(stage); err != nil {
+		return err
 	}
 
-	// Проверка наличия атомарного этапа
-	if stage.Atomic {
-		ATOMIC_STAGE = stage.Atomic
-		logMessage("DEBUG", fmt.Sprintf("ATOMIC_STAGE: %v", ATOMIC_STAGE))
-	}
-
-	// Проверка наличия пре-чека
-	if (Check{}) != stage.PreCheck {
-		logMessage("INFO", fmt.Sprintf("Running pre-check for stage: %s", stage.Name))
-		if err := executeCheck(stage.PreCheck); err != nil {
-			return fmt.Errorf("pre-check failed for stage %s: %v", stage.Name, err)
-		}
-	} else {
-		logMessage("DEBUG", fmt.Sprintf("pre_check for stage %s is missing", stage.Name))
-	}
-
-	// Проверка наличия пре-скрипта
-	if (Script{}) != stage.PreScript {
-		logMessage("INFO", fmt.Sprintf("Running pre-script for stage: %s", stage.Name))
-		if err := executeCheck(stage.PreCheck); err != nil {
-			return fmt.Errorf("pre-script failed for stage %s: %v", stage.Name, err)
-		}
-	} else {
-		logMessage("DEBUG", fmt.Sprintf("pre-script for stage %s is missing", stage.Name))
-	}
-
+	// Обрабатываем шаги
 	for _, step := range stage.Steps {
-		logMessage("INFO", fmt.Sprintf("Processing step: %s", step.Name))
 		if err := processStep(step); err != nil {
 			return err
 		}
+		// Обновляем прогресс-бар после каждого шага
+		bar.Add(1)
 	}
 
-	logMessage("INFO", fmt.Sprintf("Running post-check for stage: %s", stage.Name))
-	if err := executeCheck(stage.PostCheck); err != nil {
-		return fmt.Errorf("post-check failed for stage %s: %v", stage.Name, err)
+	// Выполняем пост-действия
+	if err := runPostActions(stage); err != nil {
+		return err
 	}
 
 	return nil
+}
+
+// startProgressBar создает и запускает прогресс-бар для этапа.
+func startProgressBar(totalSteps int, stageName string) *progressbar.ProgressBar {
+	bar := progressbar.NewOptions(
+		totalSteps,
+		progressbar.OptionSetDescription(fmt.Sprintf("Processing: %s", stageName)),
+		progressbar.OptionSetWidth(50),
+		progressbar.OptionSetWriter(os.Stdout),
+		progressbar.OptionSetRenderBlankState(true),
+	)
+	go func() {
+		for i := 0; i < totalSteps; i++ {
+			// Пауза, имитирующая выполнение каждого шага (можно настроить под вашу логику)
+			time.Sleep(500 * time.Millisecond)
+		}
+	}()
+	fmt.Println()
+	return bar
 }

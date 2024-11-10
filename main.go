@@ -33,7 +33,6 @@ func main() {
 		}
 
 		for _, stage := range config.Stages {
-			logMessage("INFO", fmt.Sprintf("Start stage: %s", stage.Name))
 			if err := processStage(stage); err != nil {
 				logMessage("ERROR", fmt.Sprintf("Error processing stage %s: %v", stage.Name, err))
 			}
@@ -53,7 +52,6 @@ func main() {
 		}
 
 		for _, stage := range config.Stages {
-			logMessage("INFO", "Processing stage: "+stage.Name)
 			if err := processStage(stage); err != nil {
 				logMessage("ERROR", fmt.Sprintf("Error processing stage %s: %v", stage.Name, err))
 			}

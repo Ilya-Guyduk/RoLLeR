@@ -2,15 +2,8 @@ stage:
 - name: MDM # Уникальное имя этапа
   desc: "Установка группы мдм" # Описание этапа
   atomic: true # Флаг атомарности обновления всего этапа
-  pre_check: 
-    location:
-      host:
-        user: "admin"
-        address: localhost
-        port:
-        password: 1604
-    bash:
-      script: "/mnt/c/Users/admin/script.bat"
+  
+    
   post_check: 
     bash:
       run: "cd /etc"
@@ -21,8 +14,8 @@ stage:
   - name: adapter # Уникальное имя шага
     location: # Описаниен местодействия
       # Если кубернетис
-      kuber: 
-        namespace: "Название неймспейса"
+      KubeConfig: 
+        namespace: "Название"
         # Если хост
       host:
         user:
@@ -37,8 +30,16 @@ stage:
       version: 1.9.2
     atomic: true # Флаг атомарности обновления
     pre_check: 
-      bash:
-        path: /путь/к/скрипту
+      location:
+        KubeConfig: 
+          namespace: "Название"
+        host:
+          user: "admin"
+          address: "192.168.1.12"
+          port:
+          password: 1604
+          bash:
+            script: "/mnt/c/Users/admin/script.bat"
     post_check: 
       bash:
         run: "cd /etc"

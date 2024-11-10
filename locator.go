@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"errors"
 	"reflect"
 )
 
@@ -17,54 +17,85 @@ type KubernetesConfig struct {
 }
 
 type Location struct {
-	Host HostConfig
+	Host       HostConfig       `yaml:"host"`
+	KubeConfig KubernetesConfig `yaml:"KubeConfig"`
 }
 
-// findLocation принимает любую структуру и ищет в ней поле "Location".
-// Если находит, проверяет Host внутри Location и возвращает его.
-// Если не находит, возвращает HostConfig с адресом "localhost" и портом 22.
-func findLocation(data interface{}) (*HostConfig, error) {
+// findHostConfig обрабатывает поле HostConfig внутри структуры Location
+// и возвращает его, заполняя значения по умолчанию при необходимости.
+func findHostConfig(locationField reflect.Value) (*HostConfig, error) {
+	hostField := locationField.FieldByName("Host")
+	var hostConfig HostConfig
+
+	if hostField.IsValid() && hostField.Kind() == reflect.Struct {
+		hostConfig = hostField.Interface().(HostConfig)
+		if hostConfig.Address == "" {
+			hostConfig.Address = "localhost"
+		}
+		if hostConfig.Port == 0 {
+			hostConfig.Port = 22
+		}
+	} else {
+		logMessage("DEBUG", "HostConfig не найден в Location")
+		return nil, nil
+	}
+
+	return &hostConfig, nil
+}
+
+// findKubernetesConfig обрабатывает поле KubernetesConfig внутри структуры Location
+// и возвращает его только если Namespace не пустой.
+func findKubernetesConfig(locationField reflect.Value) (*KubernetesConfig, error) {
+	kubeConfigField := locationField.FieldByName("KubeConfig")
+	var kubeConfig *KubernetesConfig
+
+	if kubeConfigField.IsValid() && kubeConfigField.Kind() == reflect.Struct {
+		kubeConfigVal := kubeConfigField.Interface().(KubernetesConfig)
+		// Проверяем, что Namespace не пустой
+		if kubeConfigVal.Namespace != "" {
+			kubeConfig = &kubeConfigVal
+		} else {
+			logMessage("DEBUG", "KubernetesConfig пустой, игнорируется")
+		}
+	} else {
+		logMessage("DEBUG", "KubernetesConfig не найден в Location")
+		return nil, nil
+	}
+
+	return kubeConfig, nil
+}
+
+// findLocation обрабатывает любую структуру и ищет в ней поле Location с Host и/или KubeConfig.
+// Возвращает HostConfig и KubernetesConfig, если они найдены, иначе значения по умолчанию.
+func findLocation(data interface{}) (*HostConfig, *KubernetesConfig, error) {
 	val := reflect.ValueOf(data)
-	// Проверка на указатель и получение исходного значения.
 	if val.Kind() == reflect.Ptr {
 		val = val.Elem()
 	}
 
-	// Ищем поле "Location" в структуре.
 	locationField := val.FieldByName("Location")
 	if locationField.IsValid() && locationField.Kind() == reflect.Struct {
-		hostField := locationField.FieldByName("Host")
-		// Проверка, что поле "Host" не пустое и является структурой.
-		if hostField.IsValid() && hostField.Kind() == reflect.Struct {
-			hostConfig := hostField.Interface().(HostConfig)
-
-			// Проверка наличия заполненного Address, Port, User и Password.
-			if hostConfig.Address == "" {
-				hostConfig.Address = "localhost"
-			}
-			if hostConfig.Port == 0 {
-				hostConfig.Port = 22
-			}
-			if hostConfig.User == "" {
-				logMessage("WARN", "User не указан")
-			}
-			if hostConfig.Password == "" {
-				logMessage("WARN", "Password не указан")
-			}
-
-			logMessage("DEBUG", fmt.Sprintf("Location found - Host: %s", hostConfig.Address))
-			return &hostConfig, nil
-		} else {
-			logMessage("ERROR", "Пустое поле - Host")
+		// Ищем HostConfig
+		hostConfig, err := findHostConfig(locationField)
+		if err != nil {
+			return nil, nil, err
 		}
+
+		// Ищем KubernetesConfig
+		kubeConfig, err := findKubernetesConfig(locationField)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Возвращаем найденные конфигурации
+		return hostConfig, kubeConfig, nil
 	}
 
-	// Если Location или Host не найдены, возвращаем localhost с портом 22.
-	logMessage("DEBUG", "Location for connection not found. Using localhost")
+	// Если Location не найдено, возвращаем значение по умолчанию
 	return &HostConfig{
 		Address:  "localhost",
 		Port:     22,
 		User:     "",
 		Password: "",
-	}, nil
+	}, nil, errors.New("Location для подключения не найден")
 }
