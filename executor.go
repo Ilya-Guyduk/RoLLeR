@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -17,257 +18,188 @@ type KubernetesConfig struct {
 	Namespace string
 }
 
-type Location struct {
-	KubeConfig KubernetesConfig `yaml:"KubeConfig"`
-}
-
 type Script struct {
-	Bash struct {
-		User_script string `yaml:"script"`
+	PluginType string `yaml:"plugin"` // определяет тип плагина
+	Actions    struct {
+		User_script string `yaml:"action"`
 	} `yaml:"bash"`
 	Run      string   `yaml:"run"`
-	Location Location `yaml:"location"`
+	Location struct{} `yaml:"location"`
 }
 
 type Check struct {
 	PluginType string `yaml:"plugin"` // определяет тип плагина
 	Actions    struct {
-		User_script string `yaml:"script"`
+		User_script string `yaml:"action"`
 	} `yaml:"bash"`
-	Run      string   `yaml:"run"`
-	Location Location `yaml:"location"`
+	Run      string                 `yaml:"run"`
+	Location map[string]interface{} `yaml:"location"`
 }
 
 // PluginRegistry - глобальная карта для хранения зарегистрированных плагинов
 var PluginRegistry = make(map[string]plugininterface.Connector)
 
+// loadExecutorPlugins загружает все плагины из указанной директории
 func loadExecutorPlugins(pluginsPath string) error {
 	return filepath.Walk(pluginsPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
+		if err != nil || info.IsDir() || !strings.HasSuffix(info.Name(), ".so") {
 			return err
 		}
-		if !info.IsDir() && strings.HasSuffix(info.Name(), ".so") {
-			p, err := plugin.Open(path)
-			if err != nil {
-				return fmt.Errorf("ошибка загрузки плагина %s: %v", path, err)
-			}
 
-			symbol, err := p.Lookup("NewConnector")
-			if err != nil {
-				return fmt.Errorf("ошибка поиска функции NewConnector в плагине %s: %v", path, err)
-			}
-
-			connectorFunc, ok := symbol.(func() plugininterface.Connector)
-			if !ok {
-				return fmt.Errorf("NewConnector в плагине %s не соответствует интерфейсу", path)
-			}
-
-			pluginName := strings.TrimSuffix(info.Name(), ".so")
-			PluginRegistry[pluginName] = connectorFunc()
-			log.Printf("Загружен плагин: %s", pluginName)
+		p, err := plugin.Open(path)
+		if err != nil {
+			return fmt.Errorf("ошибка загрузки плагина %s: %v", path, err)
 		}
+
+		symbol, err := p.Lookup("NewConnector")
+		if err != nil {
+			return fmt.Errorf("ошибка поиска функции NewConnector в плагине %s: %v", path, err)
+		}
+
+		connectorFunc, ok := symbol.(func() plugininterface.Connector)
+		if !ok {
+			return fmt.Errorf("NewConnector в плагине %s не соответствует интерфейсу", path)
+		}
+
+		PluginRegistry[strings.TrimSuffix(info.Name(), ".so")] = connectorFunc()
+		log.Printf("Загружен плагин: %s", info.Name())
 		return nil
 	})
 }
 
-func findPlugin(pluginType string) (plugininterface.Connector, error) {
+// findPlugin находит плагин, используя тип плагина из структуры
+func findPlugin(data interface{}) (plugininterface.Connector, error) {
+	val := reflect.ValueOf(data)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+
+	pluginTypeField := val.FieldByName("PluginType")
+	if !pluginTypeField.IsValid() || pluginTypeField.Kind() != reflect.String {
+		return nil, errors.New("неверное или отсутствующее поле PluginType")
+	}
+
+	pluginType := pluginTypeField.String()
+	if pluginType == "" {
+		return nil, errors.New("значение PluginType пустое")
+	}
+
 	plugin, ok := PluginRegistry[pluginType]
 	if !ok {
-		return nil, fmt.Errorf("плагин для типа '%s' не зарегистрирован", pluginType)
+		return nil, fmt.Errorf("плагин для типа '%s' не найден", pluginType)
 	}
+
 	return plugin, nil
 }
 
+// executePluginAction выполняет действия с плагином
 func executePluginAction(plugin plugininterface.Connector, locationData, actionData map[string]interface{}) error {
-	// Создать Location
 	location, err := plugin.CreateLocation(locationData)
-	if err != nil {
-		return fmt.Errorf("ошибка создания Location: %v", err)
+	if err != nil || location.Validate() != nil {
+		return fmt.Errorf("ошибка с Location: %v", err)
 	}
 
-	// Проверить Location
-	if err := location.Validate(); err != nil {
-		return fmt.Errorf("некорректные данные Location: %v", err)
-	}
-
-	// Подключиться
 	if err := plugin.Connect(location); err != nil {
 		return fmt.Errorf("ошибка подключения через плагин: %v", err)
 	}
 
-	// Создать Action
 	action, err := plugin.CreateAction(actionData)
 	if err != nil {
 		return fmt.Errorf("ошибка создания Action: %v", err)
 	}
 
-	// Выполнить Action
 	if err := plugin.Execute(action); err != nil {
-		return fmt.Errorf("ошибка выполнения Action через плагин: %v", err)
+		return fmt.Errorf("ошибка выполнения Action: %v", err)
 	}
 
 	return nil
 }
 
-// executePluginCommand выполняет пользовательское действие через плагин
-func executePluginCommand(plugin plugininterface.Connector, action string) error {
-	log.Printf("Выполнение действия: %s", action)
-	return plugin.Execute(action)
-}
-
-// executeScript выполняет команду скрипта, если это Script.
+// executeScript выполняет скрипт, если это Script.
 func executeScript(script Script) error {
-	// Здесь будет код для выполнения скрипта
-	logMessage("INFO", fmt.Sprintf("Executing script: %+v", script))
-
 	plugin, err := findPlugin(script)
-
-	// Если возникла критическая ошибка (не связанная с отсутствием одного из конфигов)
-	if err != nil {
+	if err != nil || plugin == nil {
 		return err
 	}
 
-	if plugin == nil {
-		return fmt.Errorf("Plugin is empty")
-	}
+	logMessage("INFO", fmt.Sprintf("Executing script: %+v", script))
 	return nil
 }
 
-// executeCheck теперь выполняет команды на основе конфигов.
+// executeCheck выполняет Check, если это Check.
 func executeCheck(check Check) error {
-	// Поиск локации выполнения чека
 	plugin, err := findPlugin(check)
-
-	// Если возникла критическая ошибка (не связанная с отсутствием одного из конфигов)
-	if err != nil {
+	if err != nil || plugin == nil {
 		return err
 	}
 
-	if plugin == nil {
-		return fmt.Errorf("Plugin is empty")
-	}
+	logMessage("INFO", "Executing check script:")
 
-	// Если DRY_RUN_FLAG установлен, только логируем, не выполняя команду
 	if DRY_RUN_FLAG {
-		if check.Actions.User_script != "" {
-			logMessage("INFO", fmt.Sprintf("Executing check script: %s", check.Actions.User_script))
-		} else if check.Run != "" {
-			logMessage("INFO", fmt.Sprintf("Executing command: %s", check.Run))
-		}
-		return nil // Не выполняем команду, только логируем
+		return nil
 	}
 
-	return nil
+	locationData := check.Location
+	actionData := map[string]interface{}{"action": check.Actions.User_script, "run": check.Run}
+
+	return executePluginAction(plugin, locationData, actionData)
 }
 
-// runPreActions выполняет pre-check и pre-script, если они есть.
-func runPreActions(data interface{}) error {
-	logMessage("DEBUG", "Search pre-actions...")
-
-	val := reflect.ValueOf(data)
-	if val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
-
-	preCheckField := val.FieldByName("PreCheck")
-	if !preCheckField.IsValid() || preCheckField.Kind() != reflect.Struct {
-		logMessage("DEBUG", "Missing Pre_check")
-	} else {
-		if err := runAction(preCheckField, "pre_check", "PreCheck"); err != nil {
-			return err
-		}
-	}
-
-	locationField := val.FieldByName("preScript")
-	if !locationField.IsValid() || locationField.Kind() != reflect.Struct {
-		logMessage("DEBUG", "Missing pre_script")
-	} else {
-		if err := runAction(locationField, "pre_script", "preScript"); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// runPostActions выполняет post-check и post-script, если они есть.
-func runPostActions(data interface{}) error {
-	logMessage("DEBUG", "Starting post-actions...")
-
-	val := reflect.ValueOf(data)
-	if val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
-
-	postCheckField := val.FieldByName("post-check")
-	if !postCheckField.IsValid() || postCheckField.Kind() != reflect.Struct {
-		logMessage("DEBUG", "Missing Post-check")
-	} else {
-		if err := runAction(postCheckField, "pre-check", "PreCheck"); err != nil {
-			return err
-		}
-	}
-
-	locationField := val.FieldByName("post-script")
-	if !locationField.IsValid() || locationField.Kind() != reflect.Struct {
-		logMessage("DEBUG", "Missing post-script")
-	} else {
-		if err := runAction(locationField, "pre-script", "preScript"); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// runAction выполняет проверку или скрипт, если они присутствуют.
-func runAction(action interface{}, actionName, actionType string) error {
+// runAction выполняет проверку или скрипт.
+func runAction(action interface{}, actionName string) error {
 	switch v := action.(type) {
 	case Check:
-		// Если это Check, выполняем проверку
-		logMessage("INFO", fmt.Sprintf("Running %s for stage", actionName))
 		if err := executeCheck(v); err != nil {
-			return fmt.Errorf("%s failed for stage: %v", actionType, err)
+			return fmt.Errorf("%s failed: %v", actionName, err)
 		}
 	case Script:
-		// Если это Script, выполняем скрипт
-		logMessage("INFO", fmt.Sprintf("Running %s for stage", actionName))
 		if err := executeScript(v); err != nil {
-			return fmt.Errorf("%s failed for stage: %v", actionType, err)
+			return fmt.Errorf("%s failed: %v", actionName, err)
 		}
 	default:
-		// Если это не Check или Script, выводим debug сообщение
-		logMessage("DEBUG", fmt.Sprintf("%s for stage is missing", actionType))
+		logMessage("DEBUG", fmt.Sprintf("%s is missing", actionName))
 	}
 	return nil
 }
 
-func executePluginAction(plugin plugininterface.Connector, locationData, actionData map[string]interface{}) error {
-	// Получить Location из плагина
-	location, err := plugin.CreateLocation(locationData)
-	if err != nil {
-		return fmt.Errorf("ошибка создания Location: %v", err)
+// runPreActions и runPostActions используют общую логику для обработки pre и post действий.
+func runActions(data interface{}, actionName string) error {
+	logMessage("DEBUG", fmt.Sprintf("Searching %s...", actionName))
+
+	val := reflect.ValueOf(data)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
 	}
 
-	// Проверить Location
-	if err := location.Validate(); err != nil {
-		return fmt.Errorf("некорректные данные Location: %v", err)
+	actionField := val.FieldByName(actionName)
+	if !actionField.IsValid() || actionField.Kind() != reflect.Struct {
+		logMessage("DEBUG", fmt.Sprintf("Missing %s", actionName))
+		return nil
 	}
 
-	// Подключиться с использованием Location
-	if err := plugin.Connect(location); err != nil {
-		return fmt.Errorf("ошибка подключения через плагин: %v", err)
+	return runAction(actionField.Interface(), actionName)
+}
+
+// runPreActions и runPostActions теперь используют runActions.
+func runPreActions(data interface{}) error {
+	if err := runActions(data, "PreCheck"); err != nil {
+		return err
 	}
 
-	// Получить Action из плагина
-	action, err := plugin.CreateAction(actionData)
-	if err != nil {
-		return fmt.Errorf("ошибка создания Action: %v", err)
+	if err := runActions(data, "preScript"); err != nil {
+		return err
 	}
 
-	// Выполнить Action
-	if err := action.Execute(); err != nil {
-		return fmt.Errorf("ошибка выполнения Action через плагин: %v", err)
+	return nil
+}
+
+func runPostActions(data interface{}) error {
+	if err := runActions(data, "post-check"); err != nil {
+		return err
+	}
+
+	if err := runActions(data, "post-script"); err != nil {
+		return err
 	}
 
 	return nil

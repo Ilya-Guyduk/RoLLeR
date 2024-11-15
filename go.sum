@@ -4,6 +4,8 @@ github.com/Ilya-Guyduk/RoLLeR/plugininterface v0.0.0-20241115103333-7c9663d249f8
 github.com/Ilya-Guyduk/RoLLeR/plugininterface v0.0.0-20241115103333-7c9663d249f8/go.mod h1:0PiiBlmf5kBWT3CEWWZn/rWbLSJscs0a4CZ2Rx9bSCU=
 github.com/Ilya-Guyduk/RoLLeR/plugininterface v0.0.0-20241115105939-f6b8e71abbf6 h1:tQnjSbLq5I3GmFe/ZrpLviH4VEyR5dBucdjTlQhjo3U=
 github.com/Ilya-Guyduk/RoLLeR/plugininterface v0.0.0-20241115105939-f6b8e71abbf6/go.mod h1:0PiiBlmf5kBWT3CEWWZn/rWbLSJscs0a4CZ2Rx9bSCU=
+github.com/Ilya-Guyduk/RoLLeR/plugininterface v0.0.0-20241115111057-8ee42c8129a4 h1:OI8ByTGYWE3MHoy5DJ3PMgpB9N2zowI3aGoySglNogM=
+github.com/Ilya-Guyduk/RoLLeR/plugininterface v0.0.0-20241115111057-8ee42c8129a4/go.mod h1:0PiiBlmf5kBWT3CEWWZn/rWbLSJscs0a4CZ2Rx9bSCU=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

@@ -23,10 +23,10 @@ stage:
     #
     #
     location: # Описаниен местодействия
-      host:
-      port:
-      user:
-      password:
+      host: "192.168.1.12"
+      port: 22
+      user: "admin"
+      password: "1604"
     #
     #
     action:

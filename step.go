@@ -9,7 +9,7 @@ type Step struct {
 	Name        string      `yaml:"name"`
 	Description string      `yaml:"desc"`
 	Dependence  interface{} `yaml:"dependence"`
-	Location    Location    `yaml:"location"`
+	Location    struct{}    `yaml:"location"`
 	Helm        HelmAction  `yaml:"helm"`
 	Yum         YumAction   `yaml:"yum"`
 	Atomic      bool        `yaml:"atomic"`
