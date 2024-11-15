@@ -55,36 +55,16 @@ func executeYumAction(yum YumAction) error {
 }
 
 func processStep(step Step) error {
-	fmt.Printf("__________________________________________________________________\n")
-	logMessage("INFO", fmt.Sprintf("Processing step: %s", step.Name))
-	if step.Description != "" {
-		logMessage("INFO", fmt.Sprintf("Desc: %s", step.Description))
-	}
+	logMessage("INFO", fmt.Sprintf("========== Processing step: %s ==========", step.Name))
 
-	// Проверка наличия атомарного этапа
-	if step.Atomic {
-		ATOMIC_STAGE = step.Atomic
-		logMessage("DEBUG", fmt.Sprintf("ATOMIC_STEP: %v", ATOMIC_STAGE))
-	}
+	// Выводим описание, если оно есть
+	printDescription(step.Description)
 
-	// Проверка наличия пре-чека
-	if (Check{}) != step.PreCheck {
-		logMessage("INFO", fmt.Sprintf("Running pre-check for step: %s", step.Name))
-		if err := executeCheck(step.PreCheck); err != nil {
-			return fmt.Errorf("pre-check failed for step %s: %v", step.Name, err)
-		}
-	} else {
-		logMessage("DEBUG", fmt.Sprintf("pre_check for step %s is missing", step.Name))
-	}
+	// Обрабатываем атомарный флаг
+	handleAtomicStage(step.Atomic)
 
-	// Проверка наличия пре-скрипта
-	if (Script{}) != step.PreScript {
-		logMessage("INFO", fmt.Sprintf("Running pre-script for step: %s", step.Name))
-		if err := executeCheck(step.PreCheck); err != nil {
-			return fmt.Errorf("pre-script failed for step %s: %v", step.Name, err)
-		}
-	} else {
-		logMessage("DEBUG", fmt.Sprintf("pre-script for step %s is missing", step.Name))
+	if err := runPreActions(step); err != nil {
+		return err
 	}
 
 	if step.Helm.ReleaseName != "" {

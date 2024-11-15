@@ -6,6 +6,7 @@ import (
 )
 
 var DRY_RUN_FLAG bool
+var PLUGINS_PATH string
 
 func main() {
 	runFlag := flag.Bool("run", false, "Run the configuration steps")
@@ -13,16 +14,20 @@ func main() {
 	configPath := flag.String("config", "roller.yml", "Path to the YAML configuration file")
 	verbose := flag.Bool("verbose", false, "Enable verbose logging")
 	logFlag := flag.String("loglevel", "INFO", "Set the log level (DEBUG, INFO, ERROR)")
+	pluginsPath := flag.String("pluginsPath", "./plugins", "Plugins path")
 
 	flag.Parse()
 
 	DRY_RUN_FLAG = *dryRunFlag
+	PLUGINS_PATH = *pluginsPath
 
 	// Настройка логирования
 	setupLogging(*logFlag)
 	logMessage("INFO", "RoLLer STARTING ...")
 
-	err := loadExecutorPlugins("./plugins")
+	// Загрузка плагинов исполнителя
+	// Каталог с плагинами по умолчанию: ./plugins
+	err := loadExecutorPlugins(PLUGINS_PATH)
 	if err != nil {
 		logMessage("ERROR", fmt.Sprintf("Error loading executor plugins: %v", err))
 	} else {
@@ -34,6 +39,9 @@ func main() {
 	if err != nil {
 		logMessage("ERROR", fmt.Sprintf("Error validating YAML file: %v", err))
 		return
+	}
+	if config.Version != "" {
+		logMessage("INFO", "Release version: %s", config.Version)
 	}
 
 	// Запуск роллера с флагом "--run"
