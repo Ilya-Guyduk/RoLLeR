@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -42,20 +41,17 @@ type Check struct {
 // PluginRegistry - глобальная карта для хранения зарегистрированных плагинов
 var PluginRegistry = make(map[string]plugininterface.Connector)
 
-// loadExecutorPlugins загружает плагины и регистрирует их
 func loadExecutorPlugins(pluginsPath string) error {
 	return filepath.Walk(pluginsPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		if !info.IsDir() && strings.HasSuffix(info.Name(), ".so") {
-			// Загружаем файл плагина
 			p, err := plugin.Open(path)
 			if err != nil {
 				return fmt.Errorf("ошибка загрузки плагина %s: %v", path, err)
 			}
 
-			// Ищем функцию NewConnector
 			symbol, err := p.Lookup("NewConnector")
 			if err != nil {
 				return fmt.Errorf("ошибка поиска функции NewConnector в плагине %s: %v", path, err)
@@ -66,43 +62,51 @@ func loadExecutorPlugins(pluginsPath string) error {
 				return fmt.Errorf("NewConnector в плагине %s не соответствует интерфейсу", path)
 			}
 
-			// Регистрируем плагин
 			pluginName := strings.TrimSuffix(info.Name(), ".so")
 			PluginRegistry[pluginName] = connectorFunc()
-			logMessage("INFO", "Загружен плагин: %s", pluginName)
+			log.Printf("Загружен плагин: %s", pluginName)
 		}
 		return nil
 	})
 }
 
-// findLocation находит и подключается к нужному плагину на основе его типа
-func findPlugin(data interface{}) (plugininterface.Connector, error) {
-	val := reflect.ValueOf(data)
-	if val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
-
-	pluginTypeField := val.FieldByName("PluginType")
-	if !pluginTypeField.IsValid() || pluginTypeField.Kind() != reflect.Struct {
-		return nil, errors.New("PluginType не указан!")
-	}
-
-	locationField := val.FieldByName("Location")
-	if !locationField.IsValid() || locationField.Kind() != reflect.String {
-		return nil, errors.New("Тип подключения не указан в Location")
-	}
-	pluginType := pluginTypeField.String()
-	logMessage("DEBUG", "pluginType %s", pluginType)
-
+func findPlugin(pluginType string) (plugininterface.Connector, error) {
 	plugin, ok := PluginRegistry[pluginType]
 	if !ok {
 		return nil, fmt.Errorf("плагин для типа '%s' не зарегистрирован", pluginType)
 	}
-
-	if err := plugin.Connect(); err != nil {
-		return nil, fmt.Errorf("ошибка при подключении через плагин '%s': %v", pluginType, err)
-	}
 	return plugin, nil
+}
+
+func executePluginAction(plugin plugininterface.Connector, locationData, actionData map[string]interface{}) error {
+	// Создать Location
+	location, err := plugin.CreateLocation(locationData)
+	if err != nil {
+		return fmt.Errorf("ошибка создания Location: %v", err)
+	}
+
+	// Проверить Location
+	if err := location.Validate(); err != nil {
+		return fmt.Errorf("некорректные данные Location: %v", err)
+	}
+
+	// Подключиться
+	if err := plugin.Connect(location); err != nil {
+		return fmt.Errorf("ошибка подключения через плагин: %v", err)
+	}
+
+	// Создать Action
+	action, err := plugin.CreateAction(actionData)
+	if err != nil {
+		return fmt.Errorf("ошибка создания Action: %v", err)
+	}
+
+	// Выполнить Action
+	if err := plugin.Execute(action); err != nil {
+		return fmt.Errorf("ошибка выполнения Action через плагин: %v", err)
+	}
+
+	return nil
 }
 
 // executePluginCommand выполняет пользовательское действие через плагин
@@ -145,8 +149,8 @@ func executeCheck(check Check) error {
 
 	// Если DRY_RUN_FLAG установлен, только логируем, не выполняя команду
 	if DRY_RUN_FLAG {
-		if check.Bash.User_script != "" {
-			logMessage("INFO", fmt.Sprintf("Executing check script: %s", check.Bash.User_script))
+		if check.Actions.User_script != "" {
+			logMessage("INFO", fmt.Sprintf("Executing check script: %s", check.Actions.User_script))
 		} else if check.Run != "" {
 			logMessage("INFO", fmt.Sprintf("Executing command: %s", check.Run))
 		}

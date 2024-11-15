@@ -12,6 +12,8 @@ type ActionInterface interface {
 
 // Connector определяет интерфейс плагина
 type Connector interface {
-	Connect(location LocationInterface) error // Устанавливает соединение
-	Execute(action ActionInterface) error     // Выполняет действие через плагин
+	Connect(location LocationInterface) error                              // Устанавливает соединение
+	Execute(action ActionInterface) error                                  // Выполняет действие через плагин
+	CreateLocation(data map[string]interface{}) (LocationInterface, error) // Создаёт Location
+	CreateAction(data map[string]interface{}) (ActionInterface, error)     // Создаёт Action
 }
