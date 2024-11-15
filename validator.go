@@ -8,7 +8,8 @@ import (
 )
 
 type Config struct {
-	Stages []Stage `yaml:"stage"`
+	Version string  `yaml:"version"`
+	Stages  []Stage `yaml:"stage"`
 }
 
 func validateYAML(configPath string) (*Config, error) {

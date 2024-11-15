@@ -9,21 +9,9 @@ import (
 	"plugin" // используем "plugin" для загрузки пользовательских библиотек
 	"reflect"
 	"strings"
+
+	"github.com/Ilya-Guyduk/RoLLeR/plugininterface"
 )
-
-// Connector - интерфейс для подключения, который реализуют все плагины
-type Connector interface {
-	Connect() error
-	Execute(action string) error
-}
-
-// HostConfig реализует Connector для SSH-подключений
-type HostConfig struct {
-	Address  string
-	Port     int
-	User     string
-	Password string
-}
 
 // KubernetesConfig реализует Connector для Kubernetes-подключений
 type KubernetesConfig struct {
@@ -31,7 +19,6 @@ type KubernetesConfig struct {
 }
 
 type Location struct {
-	Host       HostConfig       `yaml:"host"`
 	KubeConfig KubernetesConfig `yaml:"KubeConfig"`
 	PluginType string           `yaml:"plugin_type"` // определяет тип плагина
 }
@@ -53,7 +40,7 @@ type Check struct {
 }
 
 // PluginRegistry - глобальная карта для хранения зарегистрированных плагинов
-var PluginRegistry = make(map[string]Connector)
+var PluginRegistry = make(map[string]plugininterface.Connector)
 
 // loadPlugins загружает все плагины из указанной папки
 func loadExecutorPlugins(pluginsPath string) error {
@@ -74,7 +61,7 @@ func loadExecutorPlugins(pluginsPath string) error {
 				return fmt.Errorf("ошибка поиска функции NewConnector в плагине %s: %v", path, err)
 			}
 
-			connector, ok := symbol.(func() Connector)
+			connector, ok := symbol.(func() plugininterface.Connector)
 			if !ok {
 				return fmt.Errorf("NewConnector в плагине %s не реализует правильный интерфейс", path)
 			}
@@ -90,7 +77,7 @@ func loadExecutorPlugins(pluginsPath string) error {
 }
 
 // findLocation находит и подключается к нужному плагину на основе его типа
-func findLocation(data interface{}) (Connector, error) {
+func findLocation(data interface{}) (plugininterface.Connector, error) {
 	val := reflect.ValueOf(data)
 	if val.Kind() == reflect.Ptr {
 		val = val.Elem()
@@ -106,6 +93,7 @@ func findLocation(data interface{}) (Connector, error) {
 		return nil, errors.New("Тип подключения не указан в Location")
 	}
 	pluginType := pluginTypeField.String()
+	logMessage("DEBUG", "pluginType %s", pluginType)
 
 	plugin, ok := PluginRegistry[pluginType]
 	if !ok {
@@ -119,7 +107,7 @@ func findLocation(data interface{}) (Connector, error) {
 }
 
 // executePluginCommand выполняет пользовательское действие через плагин
-func executePluginCommand(plugin Connector, action string) error {
+func executePluginCommand(plugin plugininterface.Connector, action string) error {
 	log.Printf("Выполнение действия: %s", action)
 	return plugin.Execute(action)
 }
@@ -128,6 +116,17 @@ func executePluginCommand(plugin Connector, action string) error {
 func executeScript(script Script) error {
 	// Здесь будет код для выполнения скрипта
 	logMessage("INFO", fmt.Sprintf("Executing script: %+v", script))
+
+	plugin, err := findLocation(script)
+
+	// Если возникла критическая ошибка (не связанная с отсутствием одного из конфигов)
+	if err != nil {
+		return err
+	}
+
+	if plugin == nil {
+		return fmt.Errorf("Plugin is empty")
+	}
 	return nil
 }
 
@@ -138,7 +137,7 @@ func executeCheck(check Check) error {
 
 	// Если возникла критическая ошибка (не связанная с отсутствием одного из конфигов)
 	if err != nil {
-		return fmt.Errorf("Check failed: %v", err)
+		return err
 	}
 
 	if plugin == nil {

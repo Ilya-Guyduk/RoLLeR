@@ -1,11 +1,14 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"reflect"
+)
 
 // printDescription выводит описание этапа, если оно есть.
 func printDescription(description string) {
 	if description != "" {
-		logMessage("INFO", fmt.Sprintf("Desc: %s", description))
+		logMessage("INFO", fmt.Sprintf("========== %s", description))
 	}
 }
 
@@ -18,15 +21,37 @@ func handleAtomicStage(isAtomic bool) {
 }
 
 // runPreActions выполняет pre-check и pre-script, если они есть.
-func runPreActions(stage Stage) error {
-	if err := runAction(stage.PreCheck, "pre-check", "PreCheck"); err != nil {
-		return err
+func runPreActions(data interface{}) error {
+	logMessage("DEBUG", "Starting pre-actions...")
+	val := reflect.ValueOf(data)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
 	}
-	return runAction(stage.PreScript, "pre-script", "PreScript")
+
+	preCheckField := val.FieldByName("pre-check")
+	if !preCheckField.IsValid() || preCheckField.Kind() != reflect.Struct {
+		logMessage("DEBUG", "Missing Pre-check")
+	} else {
+		if err := runAction(preCheckField, "pre-check", "PreCheck"); err != nil {
+			return err
+		}
+	}
+
+	locationField := val.FieldByName("pre-script")
+	if !locationField.IsValid() || locationField.Kind() != reflect.Struct {
+		logMessage("DEBUG", "Missing pre-script")
+	} else {
+		if err := runAction(locationField, "pre-script", "preScript"); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // runPostActions выполняет post-check и post-script, если они есть.
 func runPostActions(stage Stage) error {
+	logMessage("DEBUG", "Starting post-actions...")
 	if err := runAction(stage.PostScript, "post-script", "PostScript"); err != nil {
 		return err
 	}
