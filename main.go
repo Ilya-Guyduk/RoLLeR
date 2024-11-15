@@ -20,20 +20,26 @@ func main() {
 
 	// Настройка логирования
 	setupLogging(*logFlag)
+	logMessage("INFO", "RoLLer STARTING ...")
+
+	err := loadExecutorPlugins("./plugins")
+	if err != nil {
+		logMessage("ERROR", fmt.Sprintf("Error loading executor plugins: %v", err))
+	} else {
+		logMessage("INFO", "Loaded Executor plugins")
+	}
+
+	// Валидация YML манифеста
+	config, err := validateYAML(*configPath)
+	if err != nil {
+		logMessage("ERROR", fmt.Sprintf("Error validating YAML file: %v", err))
+		return
+	}
 
 	// Запуск роллера с флагом "--run"
 	if *runFlag {
-		logMessage("INFO", "RoLLer STARTING ...")
-
-		// Валидация YML манифеста
-		config, err := validateYAML(*configPath)
-		if err != nil {
-			logMessage("ERROR", fmt.Sprintf("Error validating YAML file: %v", err))
-			return
-		}
 
 		for _, stage := range config.Stages {
-			logMessage("INFO", fmt.Sprintf("Start stage: %s", stage.Name))
 			if err := processStage(stage); err != nil {
 				logMessage("ERROR", fmt.Sprintf("Error processing stage %s: %v", stage.Name, err))
 			}
@@ -45,15 +51,8 @@ func main() {
 	}
 
 	if *dryRunFlag {
-		logMessage("INFO", "RoLLer STARTING ///")
-
-		config, err := validateYAML(*configPath)
-		if err != nil {
-			logMessage("ERROR", fmt.Sprintf("Error validating YAML file: %v", err))
-		}
 
 		for _, stage := range config.Stages {
-			logMessage("INFO", "Processing stage: "+stage.Name)
 			if err := processStage(stage); err != nil {
 				logMessage("ERROR", fmt.Sprintf("Error processing stage %s: %v", stage.Name, err))
 			}
