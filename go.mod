@@ -1,11 +1,10 @@
-module roller
+module github.com/Ilya-Guyduk/RoLLeR
 
-go 1.23.2
+go 1.22.5
 
 require (
-	github.com/schollz/progressbar/v3 v3.17.0
+	github.com/schollz/progressbar/v3 v3.17.1
 	github.com/sirupsen/logrus v1.9.3
-	golang.org/x/crypto v0.29.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
