@@ -3,6 +3,7 @@ module github.com/Ilya-Guyduk/RoLLeR
 go 1.22.5
 
 require (
+	github.com/Ilya-Guyduk/RoLLeR/plugininterface v0.0.0-20241115085430-3c50b491a5dc
 	github.com/sirupsen/logrus v1.9.3
 	gopkg.in/yaml.v3 v3.0.1
 )
