@@ -153,28 +153,6 @@ func executeCheck(check Check) error {
 		return nil // Не выполняем команду, только логируем
 	}
 
-	// Если флаг не установлен, выполняем команду как обычно
-	if check.Bash.User_script != "" {
-		logMessage("INFO", fmt.Sprintf("Executing check script: %s", check.Bash.User_script))
-		//if hostConfig != nil {
-		// Выполняем команду на хосте через SSH
-		//	return executeHostCommand(hostConfig, check.Bash.User_script)
-		//} else if kubeConfig != nil {
-		// Выполняем команду в Kubernetes
-		//	return executeK8sCommand(kubeConfig, check.Bash.User_script)
-		//}
-	} else if check.Run != "" {
-		logMessage("INFO", fmt.Sprintf("Executing command: %s", check.Run))
-		//cmdParts := strings.Fields(check.Run)
-		//if hostConfig != nil {
-		// Выполняем команду на хосте через SSH
-		//	return executeHostCommand(hostConfig, cmdParts[0])
-		//} else if kubeConfig != nil {
-		// Выполняем команду в Kubernetes
-		//	return executeK8sCommand(kubeConfig, cmdParts[0])
-		//}
-	}
-
 	return nil
 }
 
