@@ -8,6 +8,7 @@ require (
 )
 
 require (
+	github.com/Ilya-Guyduk/RoLLeR/plugininterface v0.0.0-20241115085430-3c50b491a5dc // indirect
 	github.com/stretchr/testify v1.9.0 // indirect
 	golang.org/x/sys v0.27.0 // indirect
 )
