@@ -6,48 +6,60 @@ import (
 
 // Stage представляет этап обработки с его параметрами.
 type Stage struct {
-	Name        string      `yaml:"name"`
-	Description string      `yaml:"desc"`
-	Dependence  interface{} `yaml:"dependence"`
-	Atomic      bool        `yaml:"atomic"`
-	PreCheck    Check       `yaml:"pre_check"`
-	PreScript   Script      `yaml:"pre_script"`
-	PostCheck   Check       `yaml:"post_check"`
-	PostScript  Script      `yaml:"post_scriprt"`
-	Rollback    bool        `yaml:"rollback"`
-	Steps       []Step      `yaml:"step"`
+	Name        string      `yaml:"name"`         // Имя этапа
+	Description string      `yaml:"desc"`         // Описание этапа
+	Dependence  interface{} `yaml:"dependence"`   // Зависимости этапа
+	Atomic      bool        `yaml:"atomic"`       // Флаг атомарности: если true, этап останавливается при ошибке
+	PreCheck    Check       `yaml:"pre_check"`    // Предварительная проверка перед выполнением этапа
+	PreScript   Script      `yaml:"pre_script"`   // Предварительный скрипт перед выполнением этапа
+	PostCheck   Check       `yaml:"post_check"`   // Пост-проверка после выполнения этапа
+	PostScript  Script      `yaml:"post_scriprt"` // Пост-скрипт после выполнения этапа
+	Rollback    bool        `yaml:"rollback"`     // Флаг отката: если true, позволяет откатить изменения
+	Steps       []Stage     `yaml:"step"`         // Шаги, которые входят в этот этап
 }
 
-var ATOMIC_STAGE bool
+var ATOMIC_STAGE bool // Глобальный флаг атомарности текущего этапа
 
 // processStage обрабатывает этап (Stage) с различными проверками и скриптами.
-func processStage(stage Stage) error {
+func processStage(stage Stage, parentAtomic bool) error {
 	logMessage("INFO", fmt.Sprintf("========== Start stage: %s ==========", stage.Name))
 
-	// Выводим описание, если оно есть
+	// Если указано описание этапа, выводим его в лог
 	printDescription(stage.Description)
 
-	// Обрабатываем атомарный флаг
-	handleAtomicStage(stage.Atomic)
+	// Если родительский этап не атомарен, проверяем флаг атомарности текущего этапа
+	if !parentAtomic {
+		ATOMIC_STAGE = stage.Atomic
+		logMessage("INFO", fmt.Sprintf("ATOMIC Stage: %v", ATOMIC_STAGE))
+	} else {
+		// Если родительский этап атомарен, текущий этап также наследует атомарность
+		logMessage("INFO", "ATOMIC Parent")
+	}
 
-	/*
-		Выполнение предварительные действия, если они указаны
-		Запускается функция runPreActions из utils.go
-		с переданной структурой Stage
-	*/
-	if err := runPreActions(stage); err != nil {
+	// Выполняем предварительные проверки, если они указаны
+	if err := checkHandler(stage, "preCheck", ATOMIC_STAGE); err != nil {
 		return err
 	}
 
-	// Обрабатываем шаги
+	// Выполняем предварительные действия (скрипты), если они указаны
+	if err := actionHandler(stage, "preScript", ATOMIC_STAGE); err != nil {
+		return err
+	}
+
+	// Последовательно обрабатываем каждый шаг этапа
 	for _, step := range stage.Steps {
-		if err := processStep(step); err != nil {
+		if err := processStage(step, ATOMIC_STAGE); err != nil {
 			return err
 		}
 	}
 
-	// Выполняем пост-действия
-	if err := runPostActions(stage); err != nil {
+	// Выполняем пост-проверки после завершения этапа
+	if err := checkHandler(stage, "postCheck", ATOMIC_STAGE); err != nil {
+		return err
+	}
+
+	// Выполняем пост-действия (скрипты) после завершения этапа
+	if err := actionHandler(stage, "postScript", ATOMIC_STAGE); err != nil {
 		return err
 	}
 

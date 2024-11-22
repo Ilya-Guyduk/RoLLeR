@@ -1,5 +1,10 @@
 #
 version: "0.0.1"
+# Флаг атомарности
+# В данном случае, распространяется на весь манифест
+# Если что-либо завершено неуспешно в этом манифесте, 
+# то весь манифест будет откатан до первоначалього состояния
+atomic: true
 # Главная и начальная структура
 stage:
 # Уникальное имя этапа
@@ -23,15 +28,14 @@ stage:
     #
     #
     location: # Описаниен местодействия
-      host: "192.168.1.12"
+      host: "127.0.0.1"
       port: 22
       user: "admin"
       password: "1604"
     #
     #
     action:
-      bash:
-        run: "cd /etc"
+      run: "ls -asl /etc"
 
   rollback: false
   
@@ -39,14 +43,6 @@ stage:
   step:  
   - name: adapter # Уникальное имя шага
     location: # Описаниен местодействия
-      plugin_type: "ssh_plugin"
-      KubeConfig: 
-        namespace: "Название"
-        # Если хост
-      host:
-        user:
-        address:
-        port:
         
     desc: "Установка мдм-адаптера" # Описание этапа 
     helm:
@@ -56,16 +52,13 @@ stage:
       version: 1.9.2
     atomic: true # Флаг атомарности обновления
     pre_check: 
-      location:
-        KubeConfig: 
-          namespace: "Название"
-        host:
-          user: "admin"
-          address: "192.168.1.12"
-          port:
-          password: 1604
-          bash:
-            script: "/mnt/c/Users/admin/script.bat"
+      plugin: "k8s_plugin"
+      location: # Описание локации
+        kubeconfig: "/path/to/kubeconfig"  # Путь к файлу kubeconfig для подключения к Kubernetes
+        namespace: "default"  # Указываем namespace, в котором будет выполняться команда
+      action:
+        kubernetes:
+          run: "kubectl apply -f /path/to/deployment.yaml"
     post_check: 
       bash:
         run: "cd /etc"

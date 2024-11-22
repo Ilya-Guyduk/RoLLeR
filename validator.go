@@ -7,28 +7,29 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type Config struct {
+type Manifest struct {
+	Atomic  bool    `yaml:"atomic"`
 	Version string  `yaml:"version"`
 	Stages  []Stage `yaml:"stage"`
 }
 
-func validateYAML(configPath string) (*Config, error) {
+func validateYAML(configPath string) (*Manifest, error) {
 	data, err := ioutil.ReadFile(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("error reading YAML file: %v", err)
 	}
 
-	var config Config
-	err = yaml.Unmarshal(data, &config)
+	var manifest Manifest
+	err = yaml.Unmarshal(data, &manifest)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing YAML: %v", err)
 	}
 
-	if len(config.Stages) == 0 {
+	if len(manifest.Stages) == 0 {
 		return nil, fmt.Errorf("no stages found in the YAML configuration")
 	}
 
-	for _, stage := range config.Stages {
+	for _, stage := range manifest.Stages {
 		if stage.Name == "" {
 			return nil, fmt.Errorf("stage name is missing for stage: %+v", stage)
 		}
@@ -38,5 +39,5 @@ func validateYAML(configPath string) (*Config, error) {
 		}
 	}
 
-	return &config, nil
+	return &manifest, nil
 }

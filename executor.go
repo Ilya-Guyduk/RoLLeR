@@ -3,37 +3,25 @@ package main
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
-	"plugin" // используем "plugin" для загрузки пользовательских библиотек
+	"plugin"
 	"reflect"
 	"strings"
 
 	"github.com/Ilya-Guyduk/RoLLeR/plugininterface"
 )
 
-// KubernetesConfig реализует Connector для Kubernetes-подключений
-type KubernetesConfig struct {
-	Namespace string
-}
-
 type Script struct {
-	PluginType string `yaml:"plugin"` // определяет тип плагина
-	Actions    struct {
-		User_script string `yaml:"action"`
-	} `yaml:"bash"`
-	Run      string   `yaml:"run"`
-	Location struct{} `yaml:"location"`
+	PluginType string                 `yaml:"plugin"`
+	Actions    map[string]interface{} `yaml:"action"`
+	Location   map[string]interface{} `yaml:"location"`
 }
 
 type Check struct {
-	PluginType string `yaml:"plugin"` // определяет тип плагина
-	Actions    struct {
-		User_script string `yaml:"action"`
-	} `yaml:"bash"`
-	Run      string                 `yaml:"run"`
-	Location map[string]interface{} `yaml:"location"`
+	PluginType string                 `yaml:"plugin"`
+	Actions    map[string]interface{} `yaml:"action"`
+	Location   map[string]interface{} `yaml:"location"`
 }
 
 // PluginRegistry - глобальная карта для хранения зарегистрированных плагинов
@@ -62,7 +50,7 @@ func loadExecutorPlugins(pluginsPath string) error {
 		}
 
 		PluginRegistry[strings.TrimSuffix(info.Name(), ".so")] = connectorFunc()
-		log.Printf("Загружен плагин: %s", info.Name())
+		logMessage("DEBUG", fmt.Sprintf("Loaded plugin: %s", info.Name()))
 		return nil
 	})
 }
@@ -123,7 +111,15 @@ func executeScript(script Script) error {
 	}
 
 	logMessage("INFO", fmt.Sprintf("Executing script: %+v", script))
-	return nil
+	if DRY_RUN_FLAG {
+		return nil
+	}
+
+	scriptLocationData := script.Location
+	scriptActionData := script.Actions
+
+	return executePluginAction(plugin, scriptLocationData, scriptActionData)
+
 }
 
 // executeCheck выполняет Check, если это Check.
@@ -133,73 +129,74 @@ func executeCheck(check Check) error {
 		return err
 	}
 
-	logMessage("INFO", "Executing check script:")
+	logMessage("INFO", "Executing check script")
 
 	if DRY_RUN_FLAG {
 		return nil
 	}
 
 	locationData := check.Location
-	actionData := map[string]interface{}{"action": check.Actions.User_script, "run": check.Run}
+	actionData := check.Actions
 
 	return executePluginAction(plugin, locationData, actionData)
 }
 
-// runAction выполняет проверку или скрипт.
-func runAction(action interface{}, actionName string) error {
-	switch v := action.(type) {
-	case Check:
-		if err := executeCheck(v); err != nil {
-			return fmt.Errorf("%s failed: %v", actionName, err)
-		}
-	case Script:
-		if err := executeScript(v); err != nil {
-			return fmt.Errorf("%s failed: %v", actionName, err)
-		}
-	default:
-		logMessage("DEBUG", fmt.Sprintf("%s is missing", actionName))
-	}
-	return nil
-}
-
-// runPreActions и runPostActions используют общую логику для обработки pre и post действий.
-func runActions(data interface{}, actionName string) error {
-	logMessage("DEBUG", fmt.Sprintf("Searching %s...", actionName))
+// actionHandler выполняет указанные действия (например, pre-script или post-script).
+func actionHandler(data interface{}, actionType string, atomicFlag bool) error {
+	logMessage("INFO", fmt.Sprintf("Executing %s...", actionType))
 
 	val := reflect.ValueOf(data)
 	if val.Kind() == reflect.Ptr {
 		val = val.Elem()
 	}
 
-	actionField := val.FieldByName(actionName)
-	if !actionField.IsValid() || actionField.Kind() != reflect.Struct {
-		logMessage("DEBUG", fmt.Sprintf("Missing %s", actionName))
+	actionField := val.FieldByName(strings.Title(actionType))
+	if !actionField.IsValid() {
+		logMessage("DEBUG", fmt.Sprintf("Missing %s", actionType))
 		return nil
 	}
 
-	return runAction(actionField.Interface(), actionName)
-}
-
-// runPreActions и runPostActions теперь используют runActions.
-func runPreActions(data interface{}) error {
-	if err := runActions(data, "PreCheck"); err != nil {
-		return err
-	}
-
-	if err := runActions(data, "preScript"); err != nil {
-		return err
+	// Определяем тип действия и выполняем его.
+	action := actionField.Interface()
+	switch v := action.(type) {
+	case Script:
+		if err := executeScript(v); err != nil {
+			return fmt.Errorf("%s failed: %v", actionType, err)
+		}
+	default:
+		logMessage("DEBUG", fmt.Sprintf("Unsupported action type for %s", actionType))
 	}
 
 	return nil
 }
 
-func runPostActions(data interface{}) error {
-	if err := runActions(data, "post-check"); err != nil {
-		return err
+// checkHandler выполняет проверки (например, pre-check или post-check).
+func checkHandler(data interface{}, checkType string, atomicFlag bool) error {
+	logMessage("INFO", fmt.Sprintf("Executing %s...", checkType))
+
+	val := reflect.ValueOf(data)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
 	}
 
-	if err := runActions(data, "post-script"); err != nil {
-		return err
+	checkField := val.FieldByName(strings.Title(checkType))
+	if !checkField.IsValid() {
+		logMessage("DEBUG", fmt.Sprintf("Missing %s", checkType))
+		return nil
+	}
+
+	// Определяем тип проверки и выполняем ее.
+	check := checkField.Interface()
+	switch v := check.(type) {
+	case Check:
+		if err := executeCheck(v); err != nil {
+			logMessage("ERROR", fmt.Sprintf("%s failed: %v", checkType, err))
+			if atomicFlag {
+				return fmt.Errorf("%s failed: %v", checkType, err)
+			}
+		}
+	default:
+		logMessage("DEBUG", fmt.Sprintf("Unsupported check type for %s", checkType))
 	}
 
 	return nil
