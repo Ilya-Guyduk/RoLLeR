@@ -1,9 +1,3 @@
-github.com/Ilya-Guyduk/RoLLeR/plugininterface v0.0.0-20241115085430-3c50b491a5dc h1:zFCH0QRrxhQ5SKkzNAjrJKF4uDV6sA4ritfElEQ3Nao=
-github.com/Ilya-Guyduk/RoLLeR/plugininterface v0.0.0-20241115085430-3c50b491a5dc/go.mod h1:0PiiBlmf5kBWT3CEWWZn/rWbLSJscs0a4CZ2Rx9bSCU=
-github.com/Ilya-Guyduk/RoLLeR/plugininterface v0.0.0-20241115103333-7c9663d249f8 h1:kty2Sa1uQ9TiwC7R5BZkxjJaAJrcAIU2OB5vvgm4k6g=
-github.com/Ilya-Guyduk/RoLLeR/plugininterface v0.0.0-20241115103333-7c9663d249f8/go.mod h1:0PiiBlmf5kBWT3CEWWZn/rWbLSJscs0a4CZ2Rx9bSCU=
-github.com/Ilya-Guyduk/RoLLeR/plugininterface v0.0.0-20241115105939-f6b8e71abbf6 h1:tQnjSbLq5I3GmFe/ZrpLviH4VEyR5dBucdjTlQhjo3U=
-github.com/Ilya-Guyduk/RoLLeR/plugininterface v0.0.0-20241115105939-f6b8e71abbf6/go.mod h1:0PiiBlmf5kBWT3CEWWZn/rWbLSJscs0a4CZ2Rx9bSCU=
 github.com/Ilya-Guyduk/RoLLeR/plugininterface v0.0.0-20241115111057-8ee42c8129a4 h1:OI8ByTGYWE3MHoy5DJ3PMgpB9N2zowI3aGoySglNogM=
 github.com/Ilya-Guyduk/RoLLeR/plugininterface v0.0.0-20241115111057-8ee42c8129a4/go.mod h1:0PiiBlmf5kBWT3CEWWZn/rWbLSJscs0a4CZ2Rx9bSCU=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

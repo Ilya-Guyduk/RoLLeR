@@ -1,4 +1,5 @@
 module github.com/Ilya-Guyduk/RoLLeR
+replace github.com/Ilya-Guyduk/RoLLeR => ./
 
 go 1.22.5
 
