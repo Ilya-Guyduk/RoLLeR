@@ -23,9 +23,9 @@ type Location interface {
 
 // Action определяет действие, выполняемое плагином (запуск команды, установка пакета и т.д.).
 type Action interface {
-	Validate() error        // Проверяет корректность данных действия
-	Execute() error         // Выполняет действие
-	GetDescription() string // Возвращает описание действия (для логов и отладки)
+	Validate() error                 // Проверяет корректность данных действия
+	Execute(location Location) error // Выполняет действие
+	GetDescription() string          // Возвращает описание действия (для логов и отладки)
 }
 
 // Connector объединяет работу с локациями и действиями.

@@ -21,21 +21,22 @@ stage:
   atomic: true
   
     
-  pre_check: 
+  pre_script: 
     # Если в чеке используется сторонний плагин, 
     # то его нужно указать явно с помощью 'plugin:' и его названия
     plugin: 'ssh_plugin'
     #
     #
     location: # Описаниен местодействия
-      host: "127.0.0.1"
+      host: "192.168.1.2"
       port: 22
       user: "admin"
       password: "1604"
     #
     #
     action:
-      run: "ls -asl /etc"
+      bash:
+        command: "ls -asl /etc"
 
   rollback: false
   
