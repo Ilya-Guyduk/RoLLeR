@@ -9,7 +9,7 @@ type Stage struct {
 	Name        string      `yaml:"name"`         // Имя этапа
 	Description string      `yaml:"desc"`         // Описание этапа
 	Dependence  interface{} `yaml:"dependence"`   // Зависимости этапа
-	Atomic      bool        `yaml:"atomic"`       // Флаг атомарности: если true, этап останавливается при ошибке
+	Atomic      *bool       `yaml:"atomic"`       // Флаг атомарности: если true, этап останавливается при ошибке
 	PreCheck    Check       `yaml:"pre_check"`    // Предварительная проверка перед выполнением этапа
 	PreScript   Script      `yaml:"pre_script"`   // Предварительный скрипт перед выполнением этапа
 	PostCheck   Check       `yaml:"post_check"`   // Пост-проверка после выполнения этапа
@@ -18,27 +18,60 @@ type Stage struct {
 	Steps       []Stage     `yaml:"step"`         // Шаги, которые входят в этот этап
 }
 
-var ATOMIC_STAGE bool // Глобальный флаг атомарности текущего этапа
+var ATOMIC_STAGE *bool // Глобальный флаг атомарности текущего этапа
 
-// processStage обрабатывает этап (Stage) с различными проверками и скриптами.
-func processStage(stage Stage, parentAtomic bool) error {
+func descriptor(stage Stage) {
 	logMessage("INFO", fmt.Sprintf("========== Start stage: %s ==========", stage.Name))
 
 	// Если указано описание этапа, выводим его в лог
-	printDescription(stage.Description)
+	if stage.Description != "" {
+		logMessage("INFO", fmt.Sprintf("========== %s", stage.Description))
+	}
+}
+
+// processStage обрабатывает этап (Stage) с различными проверками и скриптами.
+func processStage(stage Stage, parentAtomic *bool) error {
+
+	descriptor(stage)
 
 	// Если родительский этап не атомарен, проверяем флаг атомарности текущего этапа
-	if !parentAtomic {
-		ATOMIC_STAGE = stage.Atomic
-		logMessage("INFO", fmt.Sprintf("ATOMIC Stage: %v", ATOMIC_STAGE))
+	if parentAtomic == nil {
+		if stage.Atomic == nil {
+			logMessage("DEBUG", "STAGE. Atomic flag is not specified")
+		} else if *stage.Atomic {
+			*ATOMIC_STAGE = true
+			logMessage("DEBUG", "ONLY STAGE Atomic is true")
+		} else {
+			*ATOMIC_STAGE = false
+			logMessage("DEBUG", "STAGE Atomic is false. Parent = N/A. Skip...")
+		}
+	} else if *parentAtomic {
+		if stage.Atomic == nil {
+			*ATOMIC_STAGE = true
+			logMessage("DEBUG", "STAGE. Atomic flag is not specified. Parent = TRUE")
+		} else if *stage.Atomic {
+			*ATOMIC_STAGE = true
+			logMessage("DEBUG", "STAGE Atomic is true. Skip...")
+		} else {
+			logMessage("DEBUG", "ONLY STAGE Atomic is false")
+		}
 	} else {
-		// Если родительский этап атомарен, текущий этап также наследует атомарность
-		logMessage("INFO", "ATOMIC Parent")
+		if stage.Atomic == nil {
+			*ATOMIC_STAGE = false
+			logMessage("DEBUG", "STAGE. Atomic flag is not specified. Parent = FASLE. Skip...")
+		} else if *stage.Atomic {
+			*ATOMIC_STAGE = true
+			logMessage("DEBUG", "ONLY STAGE Atomic is true")
+		} else {
+			logMessage("DEBUG", "STAGE Atomic is false. PARENT = FALSE. Skip...")
+		}
 	}
 
 	// Выполняем предварительные проверки, если они указаны
 	if err := checkHandler(stage, "preCheck", ATOMIC_STAGE); err != nil {
-		return err
+		if *ATOMIC_STAGE {
+			return err
+		}
 	}
 
 	// Выполняем предварительные действия (скрипты), если они указаны
@@ -48,7 +81,7 @@ func processStage(stage Stage, parentAtomic bool) error {
 
 	// Последовательно обрабатываем каждый шаг этапа
 	for _, step := range stage.Steps {
-		if err := processStage(step, ATOMIC_STAGE); err != nil {
+		if err := processStage(step, parentAtomic); err != nil {
 			return err
 		}
 	}

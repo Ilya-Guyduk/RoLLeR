@@ -8,7 +8,7 @@ import (
 )
 
 type Manifest struct {
-	Atomic  bool    `yaml:"atomic"`
+	Atomic  *bool   `yaml:"atomic"`
 	Version string  `yaml:"version"`
 	Stages  []Stage `yaml:"stage"`
 }

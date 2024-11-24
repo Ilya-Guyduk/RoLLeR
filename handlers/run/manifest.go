@@ -2,6 +2,8 @@ package run
 
 import "fmt"
 
+var ATOMIC_MANIFEST string
+
 func manifestHandler(manifestPath string) error {
 
 	// Валидация YML манифеста
@@ -14,8 +16,12 @@ func manifestHandler(manifestPath string) error {
 		logMessage("INFO", "Release version: %s", config.Version)
 	}
 
-	if config.Atomic {
-		logMessage("INFO", "ATOMIC Manifest")
+	if config.Atomic == nil {
+		logMessage("DEBUG", "MANIFEST Atomic flag is not specified")
+	} else if *config.Atomic {
+		logMessage("DEBUG", "MANIFEST Atomic is true")
+	} else {
+		logMessage("DEBUG", "MANIFEST Atomic is false")
 	}
 
 	if *&DRY_RUN_FLAG {
@@ -31,8 +37,7 @@ func manifestHandler(manifestPath string) error {
 	// Обработка этапов в манифесте
 	for _, stage := range config.Stages {
 		if err := processStage(stage, config.Atomic); err != nil {
-			if config.Atomic {
-				logMessage("ERROR", fmt.Sprintf("Error processing stage %s: %v", stage.Name, err))
+			if *config.Atomic {
 				return err
 			}
 		}

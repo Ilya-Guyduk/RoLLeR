@@ -146,7 +146,7 @@ func executeCheck(check Check) error {
 }
 
 // actionHandler выполняет указанные действия (например, pre-script или post-script).
-func actionHandler(data interface{}, actionType string, atomicFlag bool) error {
+func actionHandler(data interface{}, actionType string, atomicFlag *bool) error {
 
 	val := reflect.ValueOf(data)
 	if val.Kind() == reflect.Ptr {
@@ -174,7 +174,7 @@ func actionHandler(data interface{}, actionType string, atomicFlag bool) error {
 }
 
 // checkHandler выполняет проверки (например, pre-check или post-check).
-func checkHandler(data interface{}, checkType string, atomicFlag bool) error {
+func checkHandler(data interface{}, checkType string, atomicFlag *bool) error {
 
 	val := reflect.ValueOf(data)
 	if val.Kind() == reflect.Ptr {
@@ -193,12 +193,16 @@ func checkHandler(data interface{}, checkType string, atomicFlag bool) error {
 	case Check:
 		if err := executeCheck(v); err != nil {
 			logMessage("ERROR", fmt.Sprintf("%s failed: %v", checkType, err))
-			if atomicFlag {
+			if *atomicFlag {
 				return fmt.Errorf("%s failed: %v", checkType, err)
 			}
 		}
 	default:
-		logMessage("DEBUG", fmt.Sprintf("Unsupported check type for %s", checkType))
+		if *atomicFlag {
+			return fmt.Errorf("Unsupported check type for %s", checkType)
+		} else {
+			logMessage("DEBUG", fmt.Sprintf("Unsupported check type for %s", checkType))
+		}
 	}
 
 	return nil

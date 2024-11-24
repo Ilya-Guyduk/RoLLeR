@@ -10,9 +10,8 @@ var DRY_RUN_FLAG bool
 var PLUGINS_PATH string
 
 // HandleRun обрабатывает подкоманду run
-func HandleRun(
-	args []string,
-) {
+func HandleRun(args []string) error {
+
 	runCmd := flag.NewFlagSet("run", flag.ExitOnError)
 	//dryRunFlag := runCmd.Bool("dryrun", false, "Dryrun the configuration steps")
 	configPath := runCmd.String("config", "roller.yml", "Path to the YAML configuration file")
@@ -39,4 +38,5 @@ func HandleRun(
 	}
 
 	logMessage("INFO", "RoLLer runner finish!")
+	return nil
 }

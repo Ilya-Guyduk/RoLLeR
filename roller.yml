@@ -28,15 +28,15 @@ stage:
     #
     #
     location: # Описаниен местодействия
-      host: "192.168.1.2"
+      host: "192.168.1.222"
       port: 22
-      user: "admin"
+      user: "warki"
       password: "1604"
     #
     #
     action:
       bash:
-        command: "ls -asl /etc"
+        command: "ls -asl /"
 
   rollback: false
   
@@ -64,34 +64,3 @@ stage:
       bash:
         run: "cd /etc"
     rollback: false
-
-  - name: repaptitioner
-    dependence: 
-      finish: MDM.adapter # Зависимость от завершения шага adapter в этапе MDM
-    yum:
-      actions: install
-      packet_name: mdm-adapter
-      version: 1.9.2
-      atomic: true
-
-- name: Assembler # Уникальное имя этапа
-  desc: "Установка группы сборщика" # Описание этапа 
-  step: # Начало описания шага 
-  - name: party # Уникальное имя шага
-    desc: "Установка мдм-адаптера" # Описание этапа 
-    helm:
-      actions: upgrade
-      helm_dir: /data
-      release_name: mdm-adapter
-      version: 1.9.2
-    atomic: true # Флаг атомарности обновления
-    rollback: false
-
-  - name: repaptitioner
-    dependence: 
-      finish: MDM.adapter # Зависимость от завершения шага adapter в этапе MDM
-    yum:
-      actions: install
-      packet_name: mdm-adapter
-      version: 1.9.2
-      atomic: true
