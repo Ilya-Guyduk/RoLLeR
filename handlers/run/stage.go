@@ -12,11 +12,11 @@ type Stage struct {
 	Atomic      *bool       `yaml:"atomic"`     // Флаг атомарности: если true, этап останавливается при ошибке
 	PreCheck    Check       `yaml:"pre_check"`  // Предварительная проверка перед выполнением этапа
 	PreScript   Script      `yaml:"pre_script"` // Предварительный скрипт перед выполнением этапа
-	Tasks       Task        `yaml:"tasks"`
+	Task        Task        `yaml:"task"`
 	PostCheck   Check       `yaml:"post_check"`   // Пост-проверка после выполнения этапа
 	PostScript  Script      `yaml:"post_scriprt"` // Пост-скрипт после выполнения этапа
 	Rollback    bool        `yaml:"rollback"`     // Флаг отката: если true, позволяет откатить изменения
-	Steps       []Stage     `yaml:"step"`         // Шаги, которые входят в этот этап
+	Steps       []Stage     `yaml:"stage"`        // Шаги, которые входят в этот этап
 }
 
 var ATOMIC_STAGE *bool // Глобальный флаг атомарности текущего этапа
@@ -87,14 +87,14 @@ func processStage(stage Stage, parentAtomic *bool, parentName string) error {
 	logMessage("INFO", fmt.Sprintf("[%s] ATOMIC_STAGE: %v", stageName, *ATOMIC_STAGE))
 
 	// Выполняем предварительные проверки
-	if err := checkHandler(stage, "preCheck", ATOMIC_STAGE, stageName); err != nil {
+	if err := handler(stage, "preCheck", ATOMIC_STAGE, stageName); err != nil {
 		if *ATOMIC_STAGE {
 			return err
 		}
 	}
 
 	// Выполняем предварительные действия (скрипты)
-	if err := actionHandler(stage, "preScript", ATOMIC_STAGE, stageName); err != nil {
+	if err := handler(stage, "preScript", ATOMIC_STAGE, stageName); err != nil {
 		if *ATOMIC_STAGE {
 			return err
 		}
@@ -110,21 +110,21 @@ func processStage(stage Stage, parentAtomic *bool, parentName string) error {
 	}
 
 	// Выполняем предварительные действия (скрипты)
-	if err := taskHandler(stage, "Task", ATOMIC_STAGE, stageName); err != nil {
+	if err := handler(stage, "Task", ATOMIC_STAGE, stageName); err != nil {
 		if *ATOMIC_STAGE {
 			return err
 		}
 	}
 
 	// Выполняем пост-проверки
-	if err := checkHandler(stage, "postCheck", ATOMIC_STAGE, stageName); err != nil {
+	if err := handler(stage, "postCheck", ATOMIC_STAGE, stageName); err != nil {
 		if *ATOMIC_STAGE {
 			return err
 		}
 	}
 
 	// Выполняем пост-действия (скрипты)
-	if err := actionHandler(stage, "postScript", ATOMIC_STAGE, stageName); err != nil {
+	if err := handler(stage, "postScript", ATOMIC_STAGE, stageName); err != nil {
 		if *ATOMIC_STAGE {
 			return err
 		}

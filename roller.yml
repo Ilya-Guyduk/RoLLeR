@@ -4,7 +4,7 @@ version: "0.0.1"
 # В данном случае, распространяется на весь манифест
 # Если что-либо завершено неуспешно в этом манифесте, 
 # то весь манифест будет откатан до первоначалього состояния
-atomic: true
+atomic: false
 # Главная и начальная структура
 stage:
 # Уникальное имя этапа
@@ -18,49 +18,44 @@ stage:
   # В данном случае, распространяется на весь этап
   # Если что-либо завершено неуспешно в этом этапе, 
   # то весь этап будет откатан до первоначалього состояния
-  atomic: true
-  
-    
+  atomic: false
   pre_check: 
     # Если в чеке используется сторонний плагин, 
     # то его нужно указать явно с помощью 'plugin:' и его названия
     plugin: 'ssh_plugin'
-    #
-    #
     location: # Описаниен местодействия
       host: "192.168.1.222"
       port: 22
       user: "warki"
       password: "1604"
-    #
-    #
     action:
       bash:
         command: "ls -asl /"
-
-  rollback: false
-  
   # Начало описания шагов
-  step:  
-  - name: adapter # Уникальное имя шага
-    location: # Описаниен местодействия
-        
-    desc: "Установка мдм-адаптера" # Описание этапа 
-    helm:
-      actions: upgrade
-      helm_dir: /data
-      release_name: mdm-adapter
-      version: 1.9.2
-    atomic: true # Флаг атомарности обновления
+  stage:  
+  - name: Adapter # Уникальное имя шага
+    desc: "Установка адаптера"  
+    atomic: false # Флаг атомарности обновления
     pre_check: 
-      plugin: "k8s_plugin"
-      location: # Описание локации
-        kubeconfig: "/path/to/kubeconfig"  # Путь к файлу kubeconfig для подключения к Kubernetes
-        namespace: "default"  # Указываем namespace, в котором будет выполняться команда
+      plugin: 'ssh_plugin'
+      location: # Описаниен местодействия
+        host: "192.168.1.222"
+        port: 22
+        user: "warki"
+        password: "1604"
       action:
-        kubernetes:
-          run: "kubectl apply -f /path/to/deployment.yaml"
+        bash:
+          command: "ls -asl /etc"
+    task:
+      plugin: 'ssh_plugin'
+      location: # Описаниен местодействия
+        host: "192.168.1.222"
+        port: 22
+        user: "warki"
+        password: "1604"
+      action:
+        bash:
+          command: "ls -asl /home"
     post_check: 
       bash:
         run: "cd /etc"
-    rollback: false

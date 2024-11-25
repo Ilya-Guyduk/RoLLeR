@@ -110,132 +110,65 @@ func executePluginAction(plugin plugininterface.Connector, locationData, actionD
 	return nil
 }
 
-// executeScript выполняет скрипт, если это Script.
-func executeScript(script Script, stageName string) error {
-	plugin, err := findPlugin(script)
-	if err != nil || plugin == nil {
+// executePluginItem универсально выполняет Script, Task или Check.
+func executePluginItem(item interface{}, stageName string) error {
+	// Найти плагин
+	plugin, err := findPlugin(item)
+	if err != nil {
 		return err
 	}
 
-	logMessage("INFO", fmt.Sprintf("Executing script: %+v", script))
+	// Логируем
+	logMessage("INFO", fmt.Sprintf("[%s] Executing item: %+v", stageName, item))
 	if DRY_RUN_FLAG {
 		return nil
 	}
 
-	scriptLocationData := script.Location
-	logMessage("DEBUG", fmt.Sprintf("var:scriptLocationData 'Location data for Script: %+v'", scriptLocationData))
-	scriptActionData := script.Actions
-	logMessage("DEBUG", fmt.Sprintf("var:scriptActionData 'Action data for Script: %+v'", scriptActionData))
-
-	return executePluginAction(plugin, scriptLocationData, scriptActionData, stageName)
-}
-
-// executeCheck выполняет Check, если это Check.
-func executeCheck(check Check, stageName string) error {
-	plugin, err := findPlugin(check)
-	if err != nil || plugin == nil {
-		return err
+	// Получаем данные локации и действия
+	val := reflect.ValueOf(item)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
 	}
 
-	if DRY_RUN_FLAG {
-		return nil
-	}
+	locationData := val.FieldByName("Location").Interface().(map[string]interface{})
+	actionData := val.FieldByName("Actions").Interface().(map[string]interface{})
 
-	locationData := check.Location
-	logMessage("DEBUG", fmt.Sprintf("[%s] var:locationData 'Location data for Check: %+v'", stageName, locationData))
-	actionData := check.Actions
-	logMessage("DEBUG", fmt.Sprintf("[%s] var:actionData 'Action data for Check: %+v'", stageName, actionData))
+	logMessage("DEBUG", fmt.Sprintf("[%s] var:locationData 'Location data: %+v'", stageName, locationData))
+	logMessage("DEBUG", fmt.Sprintf("[%s] var:actionData 'Action data: %+v'", stageName, actionData))
 
+	// Выполняем действие
 	return executePluginAction(plugin, locationData, actionData, stageName)
 }
 
-// actionHandler выполняет указанные действия (например, pre-script или post-script).
-func actionHandler(data interface{}, actionType string, atomicFlag *bool, stageName string) error {
+// handler универсально выполняет actions и checks.
+func handler(data interface{}, itemType string, atomicFlag *bool, stageName string) error {
 	val := reflect.ValueOf(data)
 	if val.Kind() == reflect.Ptr {
 		val = val.Elem()
 	}
 
-	actionField := val.FieldByName(strings.Title(actionType))
-	if !actionField.IsValid() || actionField.IsZero() {
-		logMessage("DEBUG", fmt.Sprintf("[%s] Missing %s", stageName, actionType))
-		return nil
-	}
-	logMessage("INFO", fmt.Sprintf("[%s] Executing %s...", stageName, actionType))
-	// Определяем тип действия и выполняем его.
-	action := actionField.Interface()
-	switch v := action.(type) {
-	case Script:
-		if err := executeScript(v, stageName); err != nil {
-			return fmt.Errorf("[%s] %s failed: %v", stageName, actionType, err)
-		}
-	default:
-		logMessage("DEBUG", fmt.Sprintf("[%s] Unsupported action type for %s", stageName, actionType))
-	}
-
-	return nil
-}
-
-// checkHandler выполняет проверки (например, pre-check или post-check).
-func checkHandler(data interface{}, checkType string, atomicFlag *bool, stageName string) error {
-	val := reflect.ValueOf(data)
-	if val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
-
-	checkField := val.FieldByName(strings.Title(checkType))
-	if !checkField.IsValid() || checkField.IsZero() {
-		logMessage("DEBUG", fmt.Sprintf("[%s] Missing %s", stageName, checkType))
+	field := val.FieldByName(strings.Title(itemType))
+	if !field.IsValid() || field.IsZero() {
+		logMessage("DEBUG", fmt.Sprintf("[%s] Missing %s", stageName, itemType))
 		return nil
 	}
 
-	logMessage("INFO", fmt.Sprintf("[%s] Executing %s...", stageName, checkType))
-	// Определяем тип проверки и выполняем ее.
-	check := checkField.Interface()
-	switch v := check.(type) {
-	case Check:
-		if err := executeCheck(v, stageName); err != nil {
+	logMessage("INFO", fmt.Sprintf("[%s] Executing %s...", stageName, itemType))
+	item := field.Interface()
 
-			if *atomicFlag {
-				return fmt.Errorf("[%s] %s failed: %v", stageName, checkType, err)
-			}
-
-			logMessage("ERROR", fmt.Sprintf("[%s] %s failed: %v", stageName, checkType, err))
+	// Универсальная обработка item (Script, Task, Check)
+	if err := executePluginItem(item, stageName); err != nil {
+		logMessage("ERROR", fmt.Sprintf("[%s] %s failed: %v", stageName, itemType, err))
+		// Если это проверка (check), сразу завершить выполнение
+		if strings.EqualFold(itemType, "preCheck") {
+			logMessage("ERROR", fmt.Sprintf("[%s] Check failed, stopping execution.", stageName))
+			os.Exit(1)
 		}
-	default:
-		if *atomicFlag {
-			return fmt.Errorf("[%s] Unsupported check type for %s", stageName, checkType)
-		} else {
-			logMessage("DEBUG", fmt.Sprintf("[%s] Unsupported check type for %s", stageName, checkType))
+
+		// Для других типов (например, actions), обработка зависит от atomicFlag
+		if atomicFlag != nil && *atomicFlag {
+			return fmt.Errorf("[%s] %s failed: %v", stageName, itemType, err)
 		}
 	}
-
-	return nil
-}
-
-// checkHandler выполняет проверки (например, pre-check или post-check).
-func taskHandler(data interface{}, actionType string, atomicFlag *bool, stageName string) error {
-	val := reflect.ValueOf(data)
-	if val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
-
-	actionField := val.FieldByName(strings.Title(actionType))
-	if !actionField.IsValid() || actionField.IsZero() {
-		logMessage("DEBUG", fmt.Sprintf("[%s] Missing %s", stageName, actionType))
-		return nil
-	}
-	logMessage("INFO", fmt.Sprintf("Executing %s...", actionType))
-	// Определяем тип действия и выполняем его.
-	action := actionField.Interface()
-	switch v := action.(type) {
-	case Script:
-		if err := executeScript(v, stageName); err != nil {
-			return fmt.Errorf("%s failed: %v", actionType, err)
-		}
-	default:
-		logMessage("DEBUG", fmt.Sprintf("Unsupported action type for %s", actionType))
-	}
-
 	return nil
 }
