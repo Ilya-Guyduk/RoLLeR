@@ -27,7 +27,7 @@ func manifestHandler(manifestPath string) error {
 	if *&DRY_RUN_FLAG {
 
 		for _, stage := range config.Stages {
-			if err := processStage(stage, config.Atomic); err != nil {
+			if err := processStage(stage, config.Atomic, ""); err != nil {
 				logMessage("ERROR", fmt.Sprintf("Error processing stage %s: %v", stage.Name, err))
 			}
 		}
@@ -36,7 +36,7 @@ func manifestHandler(manifestPath string) error {
 
 	// Обработка этапов в манифесте
 	for _, stage := range config.Stages {
-		if err := processStage(stage, config.Atomic); err != nil {
+		if err := processStage(stage, config.Atomic, ""); err != nil {
 			if *config.Atomic {
 				return err
 			}

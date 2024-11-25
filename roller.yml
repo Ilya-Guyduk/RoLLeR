@@ -21,7 +21,7 @@ stage:
   atomic: true
   
     
-  pre_script: 
+  pre_check: 
     # Если в чеке используется сторонний плагин, 
     # то его нужно указать явно с помощью 'plugin:' и его названия
     plugin: 'ssh_plugin'

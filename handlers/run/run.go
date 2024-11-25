@@ -23,7 +23,7 @@ func HandleRun(args []string) error {
 	// Настраиваем логи
 	setupLogging(*logFlag)
 
-	logMessage("INFO", "RoLLer runner starting ...")
+	logMessage("INFO", "RoLLer runner starting...")
 
 	// Загрузка плагинов
 	if err := loadExecutorPlugins(*pluginsPath); err != nil {
@@ -37,6 +37,6 @@ func HandleRun(args []string) error {
 		logMessage("ERROR", fmt.Sprintf("Error loading manifest: %v", err))
 	}
 
-	logMessage("INFO", "RoLLer runner finish!")
+	defer logMessage("INFO", "RoLLer runner finish!")
 	return nil
 }
