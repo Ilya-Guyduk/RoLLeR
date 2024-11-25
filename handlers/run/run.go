@@ -9,9 +9,20 @@ var RUN_FLAG bool
 var DRY_RUN_FLAG bool
 var PLUGINS_PATH string
 
+const (
+	MainBanner = `
+  ___     _    _        ___        __   __   _ 
+ | _ \___| |  | |   ___| _ \ __ __/  \ /  \ / |
+ |   / _ \ |__| |__/ -_)   / \ V / () | () || |
+ |_|_\___/____|____\___|_|_\  \_/ \__(_)__(_)_|    
+===============================================                                                                                             
+`
+)
+
 // HandleRun обрабатывает подкоманду run
 func HandleRun(args []string) error {
 
+	fmt.Printf(MainBanner)
 	runCmd := flag.NewFlagSet("run", flag.ExitOnError)
 	//dryRunFlag := runCmd.Bool("dryrun", false, "Dryrun the configuration steps")
 	configPath := runCmd.String("config", "roller.yml", "Path to the YAML configuration file")
