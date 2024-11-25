@@ -11,11 +11,23 @@ import (
 
 const githubRepoURL = "https://github.com/Ilya-Guyduk/RoLLeRHub"
 
+const (
+	hubBanner = `
+  ___     _    _        ___ _  _      _    
+ | _ \___| |  | |   ___| _ \ || |_  _| |__ 
+ |   / _ \ |__| |__/ -_)   / __ | || | '_ \
+ |_|_\___/____|____\___|_|_\_||_|\_,_|_.__/
+===========================================
+`
+)
+
 // HandlePluginCommand обрабатывает команды для управления плагинами
 func HandlePluginCommand(args []string) {
 	if len(args) < 1 {
 		fmt.Println("Please specify a plugin command (e.g., install, search)")
 		os.Exit(1)
+	} else {
+		fmt.Printf(hubBanner)
 	}
 
 	switch args[0] {
