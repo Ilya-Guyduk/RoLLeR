@@ -1,8 +1,10 @@
 module github.com/Ilya-Guyduk/RoLLeR
 
-replace github.com/Ilya-Guyduk/RoLLeR => ./
+
 
 go 1.22.5
+
+replace github.com/Ilya-Guyduk/RoLLeR => ./
 
 require (
 	github.com/Ilya-Guyduk/RoLLeR/plugininterface v0.0.0-20241122120219-c148b63334cf

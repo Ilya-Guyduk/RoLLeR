@@ -81,6 +81,7 @@ func findPlugin(data interface{}) (plugininterface.Connector, error) {
 	plugin, ok := PluginRegistry[pluginType]
 	if !ok {
 		return nil, fmt.Errorf("плагин для типа '%s' не найден", pluginType)
+
 	}
 
 	return plugin, nil
