@@ -1,6 +1,7 @@
 package run
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -8,30 +9,10 @@ import (
 	"plugin"
 	"reflect"
 	"strings"
-
-	"github.com/Ilya-Guyduk/RoLLeR/plugininterface"
 )
 
-type Script struct {
-	PluginType string                 `yaml:"plugin"`
-	Actions    map[string]interface{} `yaml:"action"`
-	Location   map[string]interface{} `yaml:"location"`
-}
-
-type Check struct {
-	PluginType string                 `yaml:"plugin"`
-	Actions    map[string]interface{} `yaml:"action"`
-	Location   map[string]interface{} `yaml:"location"`
-}
-
-type Task struct {
-	PluginType string                 `yaml:"plugin"`
-	Actions    map[string]interface{} `yaml:"action"`
-	Location   map[string]interface{} `yaml:"location"`
-}
-
 // PluginRegistry - глобальная карта для хранения зарегистрированных плагинов
-var PluginRegistry = make(map[string]plugininterface.Connector)
+var PluginRegistry = make(map[string]v1.Executor)
 
 // loadExecutorPlugins загружает все плагины из указанной директории
 func loadExecutorPlugins(pluginsPath string) error {
@@ -45,24 +26,30 @@ func loadExecutorPlugins(pluginsPath string) error {
 			return fmt.Errorf("ошибка загрузки плагина %s: %v", path, err)
 		}
 
-		symbol, err := p.Lookup("NewConnector")
+		symbol, err := p.Lookup("NewExecutor")
 		if err != nil {
-			return fmt.Errorf("ошибка поиска функции NewConnector в плагине %s: %v", path, err)
+			return fmt.Errorf("ошибка поиска функции NewExecutor в плагине %s: %v", path, err)
 		}
 
-		connectorFunc, ok := symbol.(func() plugininterface.Connector)
+		executorFunc, ok := symbol.(func() v1.Executor)
 		if !ok {
-			return fmt.Errorf("NewConnector в плагине %s не соответствует интерфейсу", path)
+			return fmt.Errorf("NewExecutor в плагине %s не соответствует интерфейсу Executor", path)
 		}
 
-		PluginRegistry[strings.TrimSuffix(info.Name(), ".so")] = connectorFunc()
-		logMessage("DEBUG", fmt.Sprintf("Loaded plugin: %s", info.Name()))
+		pluginInstance := executorFunc()
+		info, err := pluginInstance.GetInfo()
+		if err != nil {
+			return fmt.Errorf("ошибка получения информации о плагине %s: %v", path, err)
+		}
+
+		PluginRegistry[info.Name] = pluginInstance
+		logMessage("DEBUG", fmt.Sprintf("Loaded plugin: %s", info.Name))
 		return nil
 	})
 }
 
 // findPlugin находит плагин, используя тип плагина из структуры
-func findPlugin(data interface{}) (plugininterface.Connector, error) {
+func findPlugin(data interface{}) (v1.Executor, error) {
 	val := reflect.ValueOf(data)
 	if val.Kind() == reflect.Ptr {
 		val = val.Elem()
@@ -78,43 +65,18 @@ func findPlugin(data interface{}) (plugininterface.Connector, error) {
 		return nil, errors.New("значение PluginType пустое")
 	}
 
-	plugin, ok := PluginRegistry[pluginType]
+	executor, ok := PluginRegistry[pluginType]
 	if !ok {
 		return nil, fmt.Errorf("плагин для типа '%s' не найден", pluginType)
-
 	}
 
-	return plugin, nil
+	return executor, nil
 }
 
-// executePluginAction выполняет действия с плагином
-func executePluginAction(plugin plugininterface.Connector, locationData, actionData map[string]interface{}, stageName string) error {
-	// Создаем локацию
-	pluginLocation, err := plugin.CreateLocation(locationData)
-	logMessage("DEBUG", fmt.Sprintf("[%s] var:pluginLocation 'Location data for plugin: %+v'", stageName, pluginLocation))
-	if err != nil || pluginLocation.Validate() != nil {
-		return fmt.Errorf("ошибка с Location: %v", err)
-	}
-
-	// Создаем действие
-	pluginAction, err := plugin.CreateAction(actionData)
-	logMessage("DEBUG", fmt.Sprintf("[%s] var:pluginAction 'Action data for plugin: %+v", stageName, pluginAction))
-	if err != nil {
-		return fmt.Errorf("ошибка создания Action: %v", err)
-	}
-
-	// Выполняем подключение и действие
-	if err := plugin.Execute(pluginLocation, pluginAction); err != nil { // Теперь передаем и location, и action
-		return fmt.Errorf("ошибка выполнения действия через плагин: %v", err)
-	}
-
-	return nil
-}
-
-// executePluginItem универсально выполняет Script, Task или Check.
-func executePluginItem(item interface{}, stageName string) error {
+// executeExecutorItem универсально выполняет действие (Script, Task, Check) через Executor.
+func executeExecutorItem(item interface{}, stageName string) error {
 	// Найти плагин
-	plugin, err := findPlugin(item)
+	executor, err := findPlugin(item)
 	if err != nil {
 		return err
 	}
@@ -137,8 +99,23 @@ func executePluginItem(item interface{}, stageName string) error {
 	logMessage("DEBUG", fmt.Sprintf("[%s] var:locationData 'Location data: %+v'", stageName, locationData))
 	logMessage("DEBUG", fmt.Sprintf("[%s] var:actionData 'Action data: %+v'", stageName, actionData))
 
+	// Проверяем данные
+	if err := executor.ValidateYAML(actionData); err != nil {
+		return fmt.Errorf("ошибка валидации данных: %v", err)
+	}
+
 	// Выполняем действие
-	return executePluginAction(plugin, locationData, actionData, stageName)
+	ctx := context.TODO() // Контекст можно адаптировать под требования
+	if err := executor.Execute(ctx); err != nil {
+		status := executor.GetStatus()
+		logMessage("ERROR", fmt.Sprintf("[%s] Action failed: %s", stageName, status.Message))
+		return err
+	}
+
+	// Получаем статус и логируем результат
+	status := executor.GetStatus()
+	logMessage("INFO", fmt.Sprintf("[%s] Action completed: %s", stageName, status.Message))
+	return nil
 }
 
 // handler универсально выполняет actions и checks.
@@ -158,7 +135,7 @@ func handler(data interface{}, itemType string, atomicFlag *bool, stageName stri
 	item := field.Interface()
 
 	// Универсальная обработка item (Script, Task, Check)
-	if err := executePluginItem(item, stageName); err != nil {
+	if err := executeExecutorItem(item, stageName); err != nil {
 		logMessage("ERROR", fmt.Sprintf("[%s] %s failed: %v", stageName, itemType, err))
 		// Если это проверка (check), сразу завершить выполнение
 		if strings.EqualFold(itemType, "preCheck") {
