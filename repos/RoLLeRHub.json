@@ -1,0 +1,11 @@
+{
+  "plugins": [
+    {
+      "name": "ssh_plugin",
+      "version": "1.0.0",
+      "description": "This plugin does X and Y",
+      "url": "https://github.com/Ilya-Guyduk/RoLLeRHub/raw/main/plugins/ssh_plugin.so",
+      "dependencies": ["lib1 >= 2.0", "lib2 >= 1.5"]
+    }
+  ]
+}

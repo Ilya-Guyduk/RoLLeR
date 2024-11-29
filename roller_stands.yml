@@ -1,0 +1,15 @@
+stand:
+  name: PROD
+  desc: "Описание стенда"
+  k8s:
+    namespace: "client-profile-prod"
+    group: "prod-k8s"
+    endpoints:
+      release_name: "mdm-adapter"
+  postgres:
+    host:
+    port:
+    user:
+    password:
+
+    
