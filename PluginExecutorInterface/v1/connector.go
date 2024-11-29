@@ -1,5 +1,7 @@
 package v1
 
+import "context"
+
 // PluginInfo предоставляет общую информацию о плагине.
 type PluginInfo struct {
 	// Уникальное имя плагина
@@ -20,18 +22,27 @@ type checkService interface {
 	// Проверяет корректность данных действия
 	ValidateYAML(data map[string]interface{}) error
 	// Выполняет действие
-	Execute() error
+	Execute(ctx context.Context) error
 	// Возвращает описание действия (для логов и отладки)
-	GetDescription() string
+	GetDescription(data map[string]interface{}) string
 }
 
+// Status представляет результат выполнения действия.
+type Status struct {
+	Success bool   // Флаг успеха
+	Message string // Сообщение об ошибке или успехе
+}
+
+// actionService интерфейс для действий.
 type actionService interface {
 	// Проверяет корректность данных действия
 	ValidateYAML(data map[string]interface{}) error
-	// Выполняет действие
-	Execute() error
+	// Выполняет действие с использованием контекста
+	Execute(ctx context.Context) error
 	// Возвращает описание действия (для логов и отладки)
-	GetDescription() string
+	GetDescription(data map[string]interface{}) string
+	// Возвращает статус последнего выполнения действия
+	GetStatus() Status
 }
 
 type Executor interface {
