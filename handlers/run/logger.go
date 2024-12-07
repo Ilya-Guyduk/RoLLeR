@@ -22,20 +22,35 @@ func (f *CustomFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	return []byte(time.Now().Format("2006-01-02 15:04:05") + " " + prefix + "[" + entry.Level.String() + "] " + entry.Message + "\n"), nil
 }
 
-// Функция для настройки логирования в зависимости от уровня
-func setupLogging(logLevel string) {
-	// Устанавливаем пользовательский формат
-	logrus.SetFormatter(&CustomFormatter{})
+func setupLogging(loggingConfig *LoggingConfig) {
+	if loggingConfig == nil {
+		fmt.Println("No logging configuration provided. Using default settings.")
+		logrus.SetLevel(logrus.InfoLevel)
+		logrus.SetFormatter(&logrus.TextFormatter{})
+		return
+	}
+
+	// Устанавливаем пользовательский формат, если он указан
+	if loggingConfig.Formatter == "json" {
+		logrus.SetFormatter(&logrus.JSONFormatter{})
+	} else if loggingConfig.Formatter == "default" {
+		logrus.SetFormatter(&CustomFormatter{})
+	} else {
+		logrus.SetFormatter(&logrus.TextFormatter{})
+	}
 
 	// Устанавливаем уровень логирования
-	switch logLevel {
+	switch loggingConfig.Level {
 	case "DEBUG":
 		logrus.SetLevel(logrus.DebugLevel)
 	case "INFO":
 		logrus.SetLevel(logrus.InfoLevel)
 	case "ERROR":
 		logrus.SetLevel(logrus.ErrorLevel)
+	case "WARN":
+		logrus.SetLevel(logrus.WarnLevel)
 	default:
+		fmt.Printf("Unknown logging level '%s', defaulting to INFO\n", loggingConfig.Level)
 		logrus.SetLevel(logrus.InfoLevel)
 	}
 }

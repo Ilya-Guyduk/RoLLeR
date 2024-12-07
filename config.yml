@@ -1,0 +1,13 @@
+global:
+  logging:
+    level: "DEBUG"
+    formatter: "default"
+  plugin:
+    plugin_path: "./plugin"
+    plugin_repo_path: "./repo"
+    default_repo: "RoLLeRHub"
+  pei:
+    version: "v1"
+plugins:
+  ssh_plugin:
+    timeout_ms: 10000
