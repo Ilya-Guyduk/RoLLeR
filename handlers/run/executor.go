@@ -40,7 +40,7 @@ type Check struct {
 	Name       string                 `yaml:"name"`
 	PluginType string                 `yaml:"plugin"`
 	Actions    map[string]interface{} `yaml:"action"`
-	Component  string                 `yaml:"component"`
+	Component  map[string]interface{} `yaml:"component"`
 }
 
 func (c *Check) CheckValideData(check Check) error {
@@ -56,7 +56,7 @@ func (c *Check) CheckValideData(check Check) error {
 		return fmt.Errorf("ошибка валидации данных: %v", err)
 	}
 
-	component, err := c.Set.Stands.FindComponent(c.Component)
+	component, err := c.Set.StandsFile.FindComponent(c.Component)
 	if err != nil {
 		return err
 	}
@@ -106,8 +106,6 @@ func (c *Check) ExecCheck(item interface{}, stageName string) error {
 	// Получаем статус и логируем результат
 	status := executor.GetStatus()
 	logMessage("INFO", fmt.Sprintf("[%s] Action completed: %s", stageName, status.Message))
-	return nil
-
 	return nil
 }
 
@@ -174,42 +172,3 @@ func (t *Task) CheckValideData(task Task) error {
 
 // PluginRegistry - глобальная карта для хранения зарегистрированных плагинов
 var PluginRegistry = make(map[string]v1.Executor)
-
-/* / loadExecutorPlugins загружает все плагины из указанной директории
-func loadExecutorPlugins(pluginsPath string) error {
-	return filepath.Walk(pluginsPath, func(path string, info os.FileInfo, err error) error {
-
-		// Проверка, нет ли ошибки, не является ли объект каталогом или заканчивается на ".so"
-		if err != nil || info.IsDir() || !strings.HasSuffix(info.Name(), ".so") {
-			return err
-		}
-
-		// Загрузка плагина
-		p, err := plugin.Open(path)
-		if err != nil {
-			return fmt.Errorf("ошибка загрузки плагина %s: %v", path, err)
-		}
-
-		// Поиск функции NewExecutor в плагине
-		symbol, err := p.Lookup("NewExecutor")
-		if err != nil {
-			return fmt.Errorf("ошибка поиска функции NewExecutor в плагине %s: %v", path, err)
-		}
-
-		executorFunc, ok := symbol.(func() v1.Executor)
-		if !ok {
-			return fmt.Errorf("NewExecutor в плагине %s не соответствует интерфейсу Executor", path)
-		}
-
-		pluginInstance := executorFunc()
-		pluginInfo, err := pluginInstance.GetInfo()
-		if err != nil {
-			return fmt.Errorf("ошибка получения информации о плагине %s: %v", path, err)
-		}
-
-		PluginRegistry[pluginInfo.Name] = pluginInstance
-		logMessage("DEBUG", fmt.Sprintf("Loaded plugin: %s", info.Name))
-		return nil
-	})
-}
-*/

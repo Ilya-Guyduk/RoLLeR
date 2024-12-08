@@ -11,7 +11,8 @@ stages:
   pre_check: 
   - name: "test1"
     plugin: 'ssh_plugin'
-    component: backend
+    component: 
+      group: "prod-postgres"
     action:
       bash: "ls -asl /"
     retries: 3
@@ -23,7 +24,8 @@ stages:
     pre_check: 
     - name: "test2"
       plugin: 'ssh_plugin'
-      component: backend
+      component: 
+        group: "prod-postgres"
       action:
         bash: "ls -asl /etc"
       retries: 3
@@ -38,13 +40,15 @@ stages:
     - name: "task"
       plugin: 'ssh_plugin'
       to_version: "1.12.0"
-      component: backend
+      component:
+        group: "prod-postgres"
       action:
         bash: "ls -asl /home"
     post_check: 
     - name: "test2"
       plugin: 'ssh_plugin'
-      component: backend
+      component: 
+        group: "prod-postgres"
       action:
         bash: "ls -asl /"
       retries: 3

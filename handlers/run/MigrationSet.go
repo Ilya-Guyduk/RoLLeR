@@ -12,13 +12,22 @@ const (
 	MS_VERSION = "0.0.1"
 )
 
+type ActionMap struct {
+	Name     string
+	Action   map[string]interface{}
+	Rollback map[string]interface{}
+}
+
 type MigrationSet struct {
-	MigrationSetVersion   string
-	CurrentVersionRelease string
-	TargetVersionRelease  string
-	Migration             *Migration
-	Stands                *StandsFile
-	PluginController      *plugin.PluginController
+	StandsFile          *StandsFile
+	PluginController    *plugin.PluginController
+	ActionMap           *map[string]ActionMap
+	MigrationSetVersion string   `yaml:"msVersion"`
+	Atomic              *bool    `yaml:"atomic"` // Флаг атомарности
+	YAMLStandFile       string   `yaml:"stands"` // Путь к файлу стендов
+	FromRelease         string   `yaml:"from_release"`
+	ToRelease           string   `yaml:"to_release"`
+	Stages              []Stages `yaml:"stages"` // Список этапов
 }
 
 // Метод инициализации MigrationSet
@@ -27,36 +36,28 @@ func (mg *MigrationSet) InitMigrationSet(migrationYamlFile string, pluginControl
 	fmt.Printf("[MigrationSet] migration file: %s\n", migrationYamlFile)
 
 	// Читаем миграционный файл.
-	migration := &Migration{}
-	err := unmarshalYamlFile(migrationYamlFile, migration)
+	migrationSet := &MigrationSet{}
+	err := unmarshalYamlFile(migrationYamlFile, migrationSet)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal migration YAML file %s: %v", migration, err)
+		return nil, fmt.Errorf("failed to unmarshal migration YAML file %s: %v", migrationSet, err)
 	}
-	//if migration.msVersion != MS_VERSION {
-	//	return nil, fmt.Errorf("failed to unmarshal migration YAML file:")
-	//}
-
 	// Читаем файл стендов из конфигурации миграции.
 	stand := &StandsFile{}
-	err = unmarshalYamlFile(migration.YAMLStandFile, stand)
+	err = unmarshalYamlFile(migrationSet.YAMLStandFile, stand)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal stand YAML file %s: %v", stand, err)
 	}
 
 	// Создаем новый экземпляр MigrationSet с заполненными данными.
 	newMg := &MigrationSet{
-		MigrationSetVersion:   "0.0.1",
-		CurrentVersionRelease: migration.FromRelease,
-		TargetVersionRelease:  migration.ToRelease,
-		Migration:             migration,
-		Stands:                stand,
-		PluginController:      pluginController,
+		StandsFile:       stand,
+		PluginController: pluginController,
 	}
 
 	return newMg, nil
 }
 
-func (mg *MigrationSet) CheckValideData(migrationSet MigrationSet) error {
+func (ms *MigrationSet) CheckValideData(migrationSet MigrationSet) error {
 
 	fmt.Printf("[MigrationSet] Start valide\n")
 
@@ -67,30 +68,24 @@ func (mg *MigrationSet) CheckValideData(migrationSet MigrationSet) error {
 		fmt.Printf("[MigrationSet] correct version\n")
 	}*/
 
-	if migrationSet.TargetVersionRelease == "" {
-		return fmt.Errorf("TargetVersionRelease is empty")
-	}
-
 	fmt.Printf("[MigrationSet] Start valide Stands\n")
-	standsErr := migrationSet.Stands.CheckValideData(*migrationSet.Stands)
+	standsErr := migrationSet.StandsFile.CheckValideData(*migrationSet.StandsFile)
 	if standsErr != nil {
 		return standsErr
-	}
-
-	fmt.Printf("[MigrationSet] Start valide Migration\n")
-	migrationErr := migrationSet.Migration.CheckValideData(*migrationSet.Migration)
-	if migrationErr != nil {
-		return migrationErr
 	}
 
 	return nil
 }
 
-func (mg *MigrationSet) UpdateRelease(migrationSet MigrationSet) error {
+func (ms *MigrationSet) UpdateRelease(migrationSet MigrationSet) error {
 
-	migrationErr := migrationSet.Migration.ExecMigration(*migrationSet.Migration, *migrationSet.Stands, migrationSet.PluginController)
-	if migrationErr != nil {
-		return migrationErr
+	for _, stage := range migrationSet.Stages {
+
+		err := stage.ExecStage(stage, *ms.StandsFile, *ms.ActionMap, ms.Atomic, "")
+		if err != nil {
+			return nil
+		}
+
 	}
 
 	return nil

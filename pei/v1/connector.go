@@ -12,45 +12,28 @@ type PluginInfo struct {
 	Description string
 }
 
+type Component struct{}
+
 // Plugin интерфейс для регистрации и информации о плагине.
 type Plugin interface {
 	// Возвращает информацию о плагине
 	GetInfo() (PluginInfo, error)
 }
 
-type checkService interface {
-	// Проверяет корректность данных действия
-	ValidateYAML(data map[string]interface{}) error
-	// Выполняет действие
-	Execute(ctx context.Context) error
-	// Возвращает описание действия (для логов и отладки)
-	GetDescription(data map[string]interface{}) string
-}
-
-// Status представляет результат выполнения действия.
-type Status struct {
-	Success bool   // Флаг успеха
-	Message string // Сообщение об ошибке или успехе
-}
-type componentService interface {
-	ValidateYAMLComponent(data map[string]interface{}) error
-}
-
 // actionService интерфейс для действий.
-type actionService interface {
+type ActionService interface {
 	// Проверяет корректность данных действия
-	ValidateYAML(data map[string]interface{}) error
+	ValidateYAMLAction(ctx context.Context, data map[string]interface{}) error
 	// Выполняет действие с использованием контекста
-	Execute(ctx context.Context) error
+	ExecuteAction(ctx context.Context, component Component, data map[string]interface{}) error
+	ExecuteCheck(ctx context.Context, component Component, data map[string]interface{}) (bool, error)
 	// Возвращает описание действия (для логов и отладки)
-	GetDescription(data map[string]interface{}) string
-	// Возвращает статус последнего выполнения действия
-	GetStatus() Status
+	GetDescription(ctx context.Context, data map[string]interface{}) string
 }
 
 type Executor interface {
-	componentService
-	actionService
-	checkService
+	ActionService
 	Plugin
+
+	ValidateYAMLComponent(data map[string]interface{}) error
 }

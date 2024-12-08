@@ -14,6 +14,9 @@ type Component struct {
 }
 
 func (c *Component) CheckValideData(component Component) error {
+
+	fmt.Printf("[Component] Start valide\n")
+
 	if component.Name == "" {
 		return fmt.Errorf("'component.Name' name is empty")
 	}
@@ -57,6 +60,8 @@ type Stand struct {
 }
 
 func (s *Stand) CheckValideData(stand Stand) error {
+
+	fmt.Printf("[Stand] Start valide\n")
 
 	if stand.Name == "" {
 		return fmt.Errorf("'stand.Name' name is empty")
@@ -103,6 +108,7 @@ type StandsFile struct {
 }
 
 func (s *StandsFile) FindComponent(data interface{}) (map[string]interface{}, error) {
+
 	// Проверяем, является ли входное значение строкой
 	searchKey, ok := data.(string)
 	if !ok {
@@ -154,14 +160,18 @@ func (s *StandsFile) FindComponent(data interface{}) (map[string]interface{}, er
 }
 
 func (s *StandsFile) CheckValideData(standsFile StandsFile) error {
-	if standsFile.msVersion == "" {
-		return fmt.Errorf("'standsFile.msVersion' msVersion is empty")
-	}
 
-	if standsFile.Release == "" {
-		return fmt.Errorf("'standsFile.Release' Release is empty")
-	}
+	fmt.Printf("[StandsFile] Start valide\n")
+	/*
+		if standsFile.msVersion == "" {
+			return fmt.Errorf("'standsFile.msVersion' msVersion is empty")
+		}
 
+		if standsFile.Release == "" {
+			return fmt.Errorf("'standsFile.Release' Release is empty")
+		}
+	*/
+	fmt.Printf("[StandsFile] Starting valide Stand\n")
 	standErr := standsFile.Stand.CheckValideData(standsFile.Stand)
 	if standErr != nil {
 		return standErr

@@ -81,8 +81,6 @@ func HandleRun(args []string) error {
 	pc, pluginErr := pc.InitPluginController(*pluginsPath, "./repo", "https://github.com/Ilya-Guyduk/RoLLeRHub/raw/main/index.json")
 	if pluginErr != nil {
 		logMessage("ERROR", fmt.Sprintf("Error InitPluginController: %s", pluginErr))
-		// Если вы хотите продолжить выполнение, можно просто записать, что `pc` неинициализирован:
-		pc = nil // или создайте пустой `PluginController`
 	} else {
 		logMessage("DEBUG", fmt.Sprintf("PluginController: %s", pc))
 	}

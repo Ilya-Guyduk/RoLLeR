@@ -299,9 +299,3 @@ func isFlagSpecified(flag *bool) (bool, bool) {
 	}
 	return true, *flag // Флаг указан, возвращаем его значение
 }
-
-// processStage обрабатывает этап (Stage) с различными проверками и скриптами.
-func processStage(stage Stages, parentAtomic *bool, parentName string) error {
-
-	return nil
-}

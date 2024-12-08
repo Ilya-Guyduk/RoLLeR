@@ -31,13 +31,13 @@ func validateYAMLConfig(configPath string) (*RollerConfig, *LoggingConfig, *Plug
 	return &rollerconfig, &loggingConfig, &pluginConfig, nil
 }
 
-func validateYAMLManifest(manifestPath string) (*Migration, error) {
+func validateYAMLManifest(manifestPath string) (*MigrationSet, error) {
 	data, err := ioutil.ReadFile(manifestPath)
 	if err != nil {
 		return nil, fmt.Errorf("error reading YAML file: %v", err)
 	}
 
-	var manifest Migration
+	var manifest MigrationSet
 	err = yaml.Unmarshal(data, &manifest)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing YAML: %v", err)
