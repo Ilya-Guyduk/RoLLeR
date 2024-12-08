@@ -1,0 +1,55 @@
+#
+msVersion: "0.0.1"
+from_release: "v0.0.1"
+to_release: "v0.0.2"
+stands: "./stands.yml"
+atomic: false
+stages:
+- name: MDM 
+  desc: "Установка группы мдм" 
+  atomic: false
+  pre_check: 
+  - name: "test1"
+    plugin: 'ssh_plugin'
+    component: 
+      group: "prod-postgres"
+    action:
+      bash: "ls -asl /"
+    retries: 3
+    interval: 10s
+  stages:  
+  - name: Adapter # Уникальное имя шага
+    desc: "Установка адаптера"  
+    atomic: false # Флаг атомарности обновления
+    pre_check: 
+    - name: "test2"
+      plugin: 'ssh_plugin'
+      component: 
+        group: "prod-postgres"
+      action:
+        bash: "ls -asl /etc"
+      retries: 3
+      interval: 10s
+    pre_script: 
+    - name: "test1"
+      plugin: 'ssh_plugin'
+      component: backend
+      action:
+        bash: "ls -asl /etc"
+    task:
+    - name: "task"
+      plugin: 'ssh_plugin'
+      to_version: "1.12.0"
+      component:
+        group: "prod-postgres"
+      action:
+        bash: "ls -asl /home"
+    post_check: 
+    - name: "test2"
+      plugin: 'ssh_plugin'
+      component: 
+        group: "prod-postgres"
+      action:
+        bash: "ls -asl /"
+      retries: 3
+      interval: 10s

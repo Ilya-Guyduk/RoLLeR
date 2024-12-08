@@ -9,8 +9,171 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"plugin"
+	"reflect"
+	"strings"
 	"time"
+
+	v1 "github.com/Ilya-Guyduk/RoLLeR/pei/v1"
 )
+
+type PluginController struct {
+	ControllerVersion      string
+	ExecutorPluginRegistry map[string]v1.Executor
+	PluginRepositoryMap    map[string]string
+	LocalRepositoryPath    string
+	DefaultRepository      string
+}
+
+func (pc *PluginController) InitPluginController(pluginsPath string, repoPath string, defaultRepo string) (*PluginController, error) {
+	// Создайте новый экземпляр, если необходимо
+	if pc == nil {
+		pc = &PluginController{}
+	}
+
+	executorPluginRegistry, err := pc.loadExecutorPlugins(pluginsPath)
+	if err != nil {
+		return nil, err
+	}
+	// Создаем новый экземпляр MigrationSet с заполненными данными.
+	newPC := &PluginController{
+		ControllerVersion:      "0.0.1",
+		ExecutorPluginRegistry: executorPluginRegistry,
+		PluginRepositoryMap:    make(map[string]string),
+		LocalRepositoryPath:    "",
+		DefaultRepository:      indexFileURL,
+	}
+	return newPC, nil
+}
+
+func (pc *PluginController) FindExecutorPlugin(data interface{}) (v1.Executor, error) {
+
+	val := reflect.ValueOf(data)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+
+	pluginTypeField := val.FieldByName("PluginType")
+	if !pluginTypeField.IsValid() || pluginTypeField.Kind() != reflect.String {
+		return nil, errors.New("неверное или отсутствующее поле PluginType")
+	}
+
+	pluginType := pluginTypeField.String()
+	if pluginType == "" {
+		return nil, errors.New("значение PluginType пустое")
+	}
+
+	executor, ok := pc.ExecutorPluginRegistry[pluginType]
+	if !ok {
+		return nil, fmt.Errorf("плагин для типа '%s' не найден", pluginType)
+	}
+
+	return executor, nil
+}
+
+func (pc *PluginController) InstallPlugin(pluginName string, repositoryURL string) error {
+
+	err := pc.SearchPlugin(pluginName)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (pc *PluginController) DeletePlugin(pluginName string) error {
+
+	err := pc.SearchPlugin(pluginName)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (pc *PluginController) SearchPlugin(pluginName string) error {
+
+	return nil
+}
+
+func (pc *PluginController) AddRepo(repoJsonURL string) error {
+
+	return nil
+}
+
+func (pc *PluginController) DeleteRepo(repoName string) error {
+
+	return nil
+}
+
+func (pc *PluginController) loadExecutorPlugins(pluginsPath string) (map[string]v1.Executor, error) {
+	executorPluginRegistry := make(map[string]v1.Executor)
+
+	err := filepath.Walk(pluginsPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			fmt.Printf("WARNING: Ошибка доступа к файлу %s: %v\n", path, err)
+			return nil
+		}
+
+		// Пропускаем директории и файлы, не оканчивающиеся на ".so"
+		if info.IsDir() || !strings.HasSuffix(info.Name(), ".so") {
+			return nil
+		}
+
+		// Загружаем плагин
+		p, err := plugin.Open(path)
+		if err != nil {
+			fmt.Printf("WARNING: Ошибка загрузки плагина %s: %v\n", path, err)
+			return nil
+		}
+
+		// Ищем функцию NewExecutor
+		symbol, err := p.Lookup("NewExecutor")
+		if err != nil {
+			fmt.Printf("WARNING: Функция NewExecutor не найдена в плагине %s: %v\n", path, err)
+			return nil
+		}
+
+		// Преобразуем символ в функцию
+		executorFunc, ok := symbol.(func() v1.Executor)
+		if !ok {
+			fmt.Printf("WARNING: NewExecutor в плагине %s не соответствует интерфейсу Executor\n", path)
+			return nil
+		}
+
+		// Создаем экземпляр плагина
+		pluginInstance := executorFunc()
+		pluginInfo, err := pluginInstance.GetInfo()
+		if err != nil {
+			fmt.Printf("WARNING: Ошибка получения информации о плагине %s: %v\n", path, err)
+			return nil
+		}
+
+		// Добавляем плагин в реестр
+		executorPluginRegistry[pluginInfo.Name] = pluginInstance
+		fmt.Printf("INFO: Плагин %s успешно загружен.\n", pluginInfo.Name)
+
+		return nil
+	})
+
+	// Если произошли ошибки обхода, логируем их, но возвращаем реестр
+	if err != nil {
+		fmt.Printf("WARNING: Ошибки при обходе плагинов в директории %s: %v\n", pluginsPath, err)
+	}
+
+	return executorPluginRegistry, nil
+}
+
+func (pc *PluginController) createAndCheckDir(dir string) error {
+
+	// Создаём директорию ./plugin, если её нет
+	targetdir := dir
+	if err := os.MkdirAll(targetdir, os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create plugin directory: %v", err)
+	}
+
+	return nil
+}
 
 const githubRepoURL = "https://github.com/Ilya-Guyduk/RoLLeRHub"
 const indexFileURL = githubRepoURL + "/raw/main/index.json"

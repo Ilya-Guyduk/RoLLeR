@@ -2,89 +2,78 @@ package run
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
-	"plugin"
+
+	//"plugin"
 	"reflect"
-	"strings"
+
+	v1 "github.com/Ilya-Guyduk/RoLLeR/pei/v1"
 )
 
-// PluginRegistry - глобальная карта для хранения зарегистрированных плагинов
-var PluginRegistry = make(map[string]v1.Executor)
-
-// loadExecutorPlugins загружает все плагины из указанной директории
-func loadExecutorPlugins(pluginsPath string) error {
-	return filepath.Walk(pluginsPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() || !strings.HasSuffix(info.Name(), ".so") {
-			return err
-		}
-
-		p, err := plugin.Open(path)
-		if err != nil {
-			return fmt.Errorf("ошибка загрузки плагина %s: %v", path, err)
-		}
-
-		symbol, err := p.Lookup("NewExecutor")
-		if err != nil {
-			return fmt.Errorf("ошибка поиска функции NewExecutor в плагине %s: %v", path, err)
-		}
-
-		executorFunc, ok := symbol.(func() v1.Executor)
-		if !ok {
-			return fmt.Errorf("NewExecutor в плагине %s не соответствует интерфейсу Executor", path)
-		}
-
-		pluginInstance := executorFunc()
-		info, err := pluginInstance.GetInfo()
-		if err != nil {
-			return fmt.Errorf("ошибка получения информации о плагине %s: %v", path, err)
-		}
-
-		PluginRegistry[info.Name] = pluginInstance
-		logMessage("DEBUG", fmt.Sprintf("Loaded plugin: %s", info.Name))
-		return nil
-	})
+type Script struct {
+	Name       string                 `yaml:"name"`
+	PluginType string                 `yaml:"plugin"`
+	Actions    map[string]interface{} `yaml:"action"`
+	Component  string                 `yaml:"component"`
 }
 
-// findPlugin находит плагин, используя тип плагина из структуры
-func findPlugin(data interface{}) (v1.Executor, error) {
-	val := reflect.ValueOf(data)
-	if val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
+func (s *Script) CheckValideData(script Script) error {
 
-	pluginTypeField := val.FieldByName("PluginType")
-	if !pluginTypeField.IsValid() || pluginTypeField.Kind() != reflect.String {
-		return nil, errors.New("неверное или отсутствующее поле PluginType")
-	}
-
-	pluginType := pluginTypeField.String()
-	if pluginType == "" {
-		return nil, errors.New("значение PluginType пустое")
-	}
-
-	executor, ok := PluginRegistry[pluginType]
+	executor, ok := PluginRegistry[script.PluginType]
 	if !ok {
-		return nil, fmt.Errorf("плагин для типа '%s' не найден", pluginType)
+		return fmt.Errorf("'script.Plugin' плагин для типа '%s' не найден", script.PluginType)
 	}
-
-	return executor, nil
+	// Проверяем данные
+	if err := executor.ValidateYAML(script.Actions); err != nil {
+		return fmt.Errorf("ошибка валидации данных: %v", err)
+	}
+	return nil
 }
 
-// executeExecutorItem универсально выполняет действие (Script, Task, Check) через Executor.
-func executeExecutorItem(item interface{}, stageName string) error {
-	// Найти плагин
-	executor, err := findPlugin(item)
+func (s *Script) ExecScript(item interface{}, stageName string) error {
+
+	return nil
+}
+
+type Check struct {
+	Set        *MigrationSet
+	Name       string                 `yaml:"name"`
+	PluginType string                 `yaml:"plugin"`
+	Actions    map[string]interface{} `yaml:"action"`
+	Component  map[string]interface{} `yaml:"component"`
+}
+
+func (c *Check) CheckValideData(check Check) error {
+
+	pc := c.Set.PluginController
+
+	executor, ok := pc.ExecutorPluginRegistry[check.PluginType]
+	if !ok {
+		return fmt.Errorf("'component.Plugin' плагин для типа '%s' не найден", check.PluginType)
+	}
+	// Проверяем данные
+	if err := executor.ValidateYAML(check.Actions); err != nil {
+		return fmt.Errorf("ошибка валидации данных: %v", err)
+	}
+
+	component, err := c.Set.StandsFile.FindComponent(c.Component)
 	if err != nil {
 		return err
 	}
+	componentErr := executor.ValidateYAML(component)
+	if componentErr != nil {
+		return err
+	}
 
-	// Логируем
-	logMessage("INFO", fmt.Sprintf("[%s] Executing item: %+v", stageName, item))
-	if DRY_RUN_FLAG {
-		return nil
+	return nil
+}
+
+func (c *Check) ExecCheck(item interface{}, stageName string) error {
+
+	// Найти плагин
+	executor, err := c.Set.PluginController.FindExecutorPlugin(c.PluginType)
+	if err != nil {
+		return err
 	}
 
 	// Получаем данные локации и действия
@@ -93,14 +82,16 @@ func executeExecutorItem(item interface{}, stageName string) error {
 		val = val.Elem()
 	}
 
-	locationData := val.FieldByName("Location").Interface().(map[string]interface{})
+	componentData := val.FieldByName("Component").Interface().(map[string]interface{})
 	actionData := val.FieldByName("Actions").Interface().(map[string]interface{})
-
-	logMessage("DEBUG", fmt.Sprintf("[%s] var:locationData 'Location data: %+v'", stageName, locationData))
-	logMessage("DEBUG", fmt.Sprintf("[%s] var:actionData 'Action data: %+v'", stageName, actionData))
 
 	// Проверяем данные
 	if err := executor.ValidateYAML(actionData); err != nil {
+		return fmt.Errorf("ошибка валидации данных: %v", err)
+	}
+
+	// Проверяем данные
+	if err := executor.ValidateYAML(componentData); err != nil {
 		return fmt.Errorf("ошибка валидации данных: %v", err)
 	}
 
@@ -118,35 +109,66 @@ func executeExecutorItem(item interface{}, stageName string) error {
 	return nil
 }
 
-// handler универсально выполняет actions и checks.
-func handler(data interface{}, itemType string, atomicFlag *bool, stageName string) error {
-	val := reflect.ValueOf(data)
+type Task struct {
+	Set        *MigrationSet
+	PluginType string                 `yaml:"plugin"`
+	Actions    map[string]interface{} `yaml:"action"`
+	Component  string                 `yaml:"component"`
+}
+
+func (t *Task) ExecTask(item interface{}, stageName string) error {
+
+	// Найти плагин
+	executor, err := t.Set.PluginController.FindExecutorPlugin(t.PluginType)
+	if err != nil {
+		return err
+	}
+
+	// Получаем данные локации и действия
+	val := reflect.ValueOf(item)
 	if val.Kind() == reflect.Ptr {
 		val = val.Elem()
 	}
 
-	field := val.FieldByName(strings.Title(itemType))
-	if !field.IsValid() || field.IsZero() {
-		logMessage("DEBUG", fmt.Sprintf("[%s] Missing %s", stageName, itemType))
-		return nil
+	componentData := val.FieldByName("Component").Interface().(map[string]interface{})
+	actionData := val.FieldByName("Actions").Interface().(map[string]interface{})
+
+	// Проверяем данные
+	if err := executor.ValidateYAML(actionData); err != nil {
+		return fmt.Errorf("ошибка валидации данных: %v", err)
 	}
 
-	logMessage("INFO", fmt.Sprintf("[%s] Executing %s...", stageName, itemType))
-	item := field.Interface()
+	// Проверяем данные
+	if err := executor.ValidateYAML(componentData); err != nil {
+		return fmt.Errorf("ошибка валидации данных: %v", err)
+	}
 
-	// Универсальная обработка item (Script, Task, Check)
-	if err := executeExecutorItem(item, stageName); err != nil {
-		logMessage("ERROR", fmt.Sprintf("[%s] %s failed: %v", stageName, itemType, err))
-		// Если это проверка (check), сразу завершить выполнение
-		if strings.EqualFold(itemType, "preCheck") {
-			logMessage("ERROR", fmt.Sprintf("[%s] Check failed, stopping execution.", stageName))
-			os.Exit(1)
-		}
+	// Выполняем действие
+	ctx := context.TODO() // Контекст можно адаптировать под требования
+	if err := executor.Execute(ctx); err != nil {
+		status := executor.GetStatus()
+		logMessage("ERROR", fmt.Sprintf("[%s] Action failed: %s", stageName, status.Message))
+		return err
+	}
 
-		// Для других типов (например, actions), обработка зависит от atomicFlag
-		if atomicFlag != nil && *atomicFlag {
-			return fmt.Errorf("[%s] %s failed: %v", stageName, itemType, err)
-		}
+	// Получаем статус и логируем результат
+	status := executor.GetStatus()
+	logMessage("INFO", fmt.Sprintf("[%s] Action completed: %s", stageName, status.Message))
+	return nil
+}
+
+func (t *Task) CheckValideData(task Task) error {
+
+	executor, ok := PluginRegistry[task.PluginType]
+	if !ok {
+		return fmt.Errorf("'component.Plugin' плагин для типа '%s' не найден", task.PluginType)
+	}
+	// Проверяем данные
+	if err := executor.ValidateYAML(task.Actions); err != nil {
+		return fmt.Errorf("ошибка валидации данных: %v", err)
 	}
 	return nil
 }
+
+// PluginRegistry - глобальная карта для хранения зарегистрированных плагинов
+var PluginRegistry = make(map[string]v1.Executor)

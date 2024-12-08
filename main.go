@@ -18,6 +18,7 @@ func main() {
 	// Обработка подкоманды
 	switch os.Args[1] {
 	case "run":
+
 		run.HandleRun(
 			os.Args[2:],
 		)

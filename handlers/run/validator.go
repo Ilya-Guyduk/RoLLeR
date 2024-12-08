@@ -7,19 +7,37 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type Manifest struct {
-	Atomic  *bool   `yaml:"atomic"`
-	Version string  `yaml:"version"`
-	Stages  []Stage `yaml:"stage"`
+func validateYAMLConfig(configPath string) (*RollerConfig, *LoggingConfig, *PluginConfig, error) {
+	// Чтение файла
+	data, err := ioutil.ReadFile(configPath)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("error reading YAML file: %v", err)
+	}
+
+	// Разбор rollerConfig
+	var rollerconfig RollerConfig
+	err = yaml.Unmarshal(data, &rollerconfig)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("error parsing YAML for rollerConfig: %v", err)
+	}
+
+	// Извлечение блока Logging
+	loggingConfig := rollerconfig.Global.Logging
+	pluginConfig := rollerconfig.Global.Plugin
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return &rollerconfig, &loggingConfig, &pluginConfig, nil
 }
 
-func validateYAML(configPath string) (*Manifest, error) {
-	data, err := ioutil.ReadFile(configPath)
+func validateYAMLManifest(manifestPath string) (*MigrationSet, error) {
+	data, err := ioutil.ReadFile(manifestPath)
 	if err != nil {
 		return nil, fmt.Errorf("error reading YAML file: %v", err)
 	}
 
-	var manifest Manifest
+	var manifest MigrationSet
 	err = yaml.Unmarshal(data, &manifest)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing YAML: %v", err)
@@ -34,9 +52,9 @@ func validateYAML(configPath string) (*Manifest, error) {
 			return nil, fmt.Errorf("stage name is missing for stage: %+v", stage)
 		}
 
-		if len(stage.Steps) == 0 {
-			return nil, fmt.Errorf("no steps found for stage: %s", stage.Name)
-		}
+		//if len(stage.Stages) == 0 {
+		//	return nil, fmt.Errorf("no steps found for stage: %s", stage.Name)
+		//}
 	}
 
 	return &manifest, nil
