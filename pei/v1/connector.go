@@ -14,7 +14,7 @@ type PluginInfo struct {
 
 type Component struct{}
 type Action struct{}
-type Ckeck struct{}
+type Check struct{}
 
 // Plugin интерфейс для регистрации и информации о плагине.
 type Plugin interface {
@@ -31,7 +31,7 @@ type ActionService interface {
 	// Выполняет действие с использованием контекста
 	ExecuteAction(ctx context.Context, component Component, action Action) error
 	// Выполняет действие с использованием контекста
-	ExecuteCheck(ctx context.Context, component Component, check Ckeck) (bool, error)
+	ExecuteCheck(ctx context.Context, component Component, check Check) (bool, error)
 	// Возвращает описание действия (для логов и отладки)
 	GetDescription(ctx context.Context, data map[string]interface{}) string
 }
