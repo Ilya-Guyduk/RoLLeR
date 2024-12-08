@@ -13,6 +13,8 @@ type PluginInfo struct {
 }
 
 type Component struct{}
+type Action struct{}
+type Ckeck struct{}
 
 // Plugin интерфейс для регистрации и информации о плагине.
 type Plugin interface {
@@ -23,17 +25,24 @@ type Plugin interface {
 // actionService интерфейс для действий.
 type ActionService interface {
 	// Проверяет корректность данных действия
-	ValidateYAMLAction(ctx context.Context, data map[string]interface{}) error
+	ValidateYAMLAction(ctx context.Context, action Action) error
+
+	GetAction(data map[string]interface{}) (Action, error)
 	// Выполняет действие с использованием контекста
-	ExecuteAction(ctx context.Context, component Component, data map[string]interface{}) error
-	ExecuteCheck(ctx context.Context, component Component, data map[string]interface{}) (bool, error)
+	ExecuteAction(ctx context.Context, component Component, action Action) error
+	// Выполняет действие с использованием контекста
+	ExecuteCheck(ctx context.Context, component Component, check Ckeck) (bool, error)
 	// Возвращает описание действия (для логов и отладки)
 	GetDescription(ctx context.Context, data map[string]interface{}) string
 }
 
+type ComponentService interface {
+	ValidateYAMLComponent(data map[string]interface{}) error
+	GetComponent(data map[string]interface{}) (Component, error)
+}
+
 type Executor interface {
+	ComponentService
 	ActionService
 	Plugin
-
-	ValidateYAMLComponent(data map[string]interface{}) error
 }
