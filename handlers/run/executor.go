@@ -19,12 +19,17 @@ type Script struct {
 
 func (s *Script) CheckValideData(script Script) error {
 
+	ctx := context.TODO()
+
 	executor, ok := PluginRegistry[script.PluginType]
 	if !ok {
 		return fmt.Errorf("'script.Plugin' плагин для типа '%s' не найден", script.PluginType)
 	}
+
+	var v1Action v1.Action
+
 	// Проверяем данные
-	if err := executor.ValidateYAML(script.Actions); err != nil {
+	if err := executor.ValidateYAMLAction(ctx, v1Action); err != nil {
 		return fmt.Errorf("ошибка валидации данных: %v", err)
 	}
 	return nil
@@ -45,22 +50,27 @@ type Check struct {
 
 func (c *Check) CheckValideData(check Check) error {
 
+	ctx := context.TODO()
+
 	pc := c.Set.PluginController
 
 	executor, ok := pc.ExecutorPluginRegistry[check.PluginType]
 	if !ok {
 		return fmt.Errorf("'component.Plugin' плагин для типа '%s' не найден", check.PluginType)
 	}
-	// Проверяем данные
-	if err := executor.ValidateYAML(check.Actions); err != nil {
-		return fmt.Errorf("ошибка валидации данных: %v", err)
+
+	if v1Action, err := executor.GetAction(check.Actions); err == nil {
+		// Проверяем данные
+		if err := executor.ValidateYAMLAction(ctx, v1Action); err != nil {
+			return fmt.Errorf("ошибка валидации данных: %v", err)
+		}
 	}
 
 	component, err := c.Set.StandsFile.FindComponent(c.Component)
 	if err != nil {
 		return err
 	}
-	componentErr := executor.ValidateYAML(component)
+	componentErr := executor.ValidateYAMLComponent(component)
 	if componentErr != nil {
 		return err
 	}
@@ -69,6 +79,8 @@ func (c *Check) CheckValideData(check Check) error {
 }
 
 func (c *Check) ExecCheck(item interface{}, stageName string) error {
+
+	ctx := context.TODO()
 
 	// Найти плагин
 	executor, err := c.Set.PluginController.FindExecutorPlugin(c.PluginType)
@@ -83,21 +95,25 @@ func (c *Check) ExecCheck(item interface{}, stageName string) error {
 	}
 
 	componentData := val.FieldByName("Component").Interface().(map[string]interface{})
-	actionData := val.FieldByName("Actions").Interface().(map[string]interface{})
+	//actionData := val.FieldByName("Actions").Interface().(map[string]interface{})
+
+	var v1Action v1.Action
+	var v1Check v1.Check
+	var v1Component v1.Component
 
 	// Проверяем данные
-	if err := executor.ValidateYAML(actionData); err != nil {
+	if err := executor.ValidateYAMLAction(ctx, v1Action); err != nil {
 		return fmt.Errorf("ошибка валидации данных: %v", err)
 	}
 
 	// Проверяем данные
-	if err := executor.ValidateYAML(componentData); err != nil {
+	if err := executor.ValidateYAMLComponent(componentData); err != nil {
 		return fmt.Errorf("ошибка валидации данных: %v", err)
 	}
 
 	// Выполняем действие
-	ctx := context.TODO() // Контекст можно адаптировать под требования
-	if err := executor.Execute(ctx); err != nil {
+	//ctx := context.TODO() // Контекст можно адаптировать под требования
+	if _, err := executor.ExecuteCheck(ctx, v1Component, v1Check); err != nil {
 		status := executor.GetStatus()
 		logMessage("ERROR", fmt.Sprintf("[%s] Action failed: %s", stageName, status.Message))
 		return err
@@ -119,7 +135,7 @@ type Task struct {
 func (t *Task) ExecTask(item interface{}, stageName string) error {
 
 	// Найти плагин
-	executor, err := t.Set.PluginController.FindExecutorPlugin(t.PluginType)
+	_, err := t.Set.PluginController.FindExecutorPlugin(t.PluginType)
 	if err != nil {
 		return err
 	}
@@ -129,32 +145,8 @@ func (t *Task) ExecTask(item interface{}, stageName string) error {
 	if val.Kind() == reflect.Ptr {
 		val = val.Elem()
 	}
-
-	componentData := val.FieldByName("Component").Interface().(map[string]interface{})
-	actionData := val.FieldByName("Actions").Interface().(map[string]interface{})
-
-	// Проверяем данные
-	if err := executor.ValidateYAML(actionData); err != nil {
-		return fmt.Errorf("ошибка валидации данных: %v", err)
-	}
-
-	// Проверяем данные
-	if err := executor.ValidateYAML(componentData); err != nil {
-		return fmt.Errorf("ошибка валидации данных: %v", err)
-	}
-
-	// Выполняем действие
-	ctx := context.TODO() // Контекст можно адаптировать под требования
-	if err := executor.Execute(ctx); err != nil {
-		status := executor.GetStatus()
-		logMessage("ERROR", fmt.Sprintf("[%s] Action failed: %s", stageName, status.Message))
-		return err
-	}
-
-	// Получаем статус и логируем результат
-	status := executor.GetStatus()
-	logMessage("INFO", fmt.Sprintf("[%s] Action completed: %s", stageName, status.Message))
 	return nil
+
 }
 
 func (t *Task) CheckValideData(task Task) error {

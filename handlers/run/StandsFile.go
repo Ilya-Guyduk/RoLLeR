@@ -37,7 +37,7 @@ func (c *Component) CheckValideData(component Component) error {
 		return fmt.Errorf("'component.Plugin' плагин для типа '%s' не найден", component.Plugin)
 	}
 	// Проверяем данные
-	if err := executor.ValidateYAML(component.ComponentConfig); err != nil {
+	if err := executor.ValidateYAMLComponent(component.ComponentConfig); err != nil {
 		return fmt.Errorf("ошибка валидации данных: %v", err)
 	}
 	return nil
