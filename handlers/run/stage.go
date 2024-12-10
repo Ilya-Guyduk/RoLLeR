@@ -40,7 +40,7 @@ func (s *Stages) CheckValideData(stage Stages) error {
 			nameSet[PreCheck.Name] = true
 
 			// Проверяем остальные данные компонента
-			PreCheckErr := PreCheck.CheckValideData(PreCheck)
+			_, _, PreCheckErr := PreCheck.CheckValideData(PreCheck)
 			if PreCheckErr != nil {
 				return PreCheckErr
 			}
@@ -112,7 +112,7 @@ func (s *Stages) CheckValideData(stage Stages) error {
 			nameSet[PreCheck.Name] = true
 
 			// Проверяем остальные данные компонента
-			componentErr := PreCheck.CheckValideData(PreCheck)
+			_, _, componentErr := PreCheck.CheckValideData(PreCheck)
 			if componentErr != nil {
 				return componentErr
 			}

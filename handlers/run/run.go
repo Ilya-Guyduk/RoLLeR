@@ -94,15 +94,15 @@ func HandleRun(args []string) error {
 	}
 
 	// Каскадная валидация миграции
-	logMessage("INFO", fmt.Sprintf(" Starting migrationSet.CheckValideData:"))
+	logMessage("INFO", fmt.Sprintf(" Starting migrationSet.CheckValideData"))
 	validErr := migrationSet.CheckValideData(*migrationSet)
 	if validErr != nil {
-		return validErr
+		logMessage("ERROR", fmt.Sprintf("Error CheckValideData: %s", validErr))
 	}
 
 	updateErr := migrationSet.UpdateRelease(*migrationSet)
 	if updateErr != nil {
-		return updateErr
+		logMessage("ERROR", fmt.Sprintf("Error UpdateRelease: %s", updateErr))
 	}
 
 	/*/ Обрабатываем манифест

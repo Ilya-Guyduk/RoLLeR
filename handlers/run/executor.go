@@ -11,6 +11,7 @@ import (
 )
 
 type Script struct {
+	Set        *MigrationSet
 	Name       string                 `yaml:"name"`
 	PluginType string                 `yaml:"plugin"`
 	Actions    map[string]interface{} `yaml:"action"`
@@ -21,7 +22,8 @@ func (s *Script) CheckValideData(script Script) error {
 
 	ctx := context.TODO()
 
-	executor, ok := PluginRegistry[script.PluginType]
+	pc := s.Set.PluginController
+	executor, ok := pc.ExecutorPluginRegistry[script.PluginType]
 	if !ok {
 		return fmt.Errorf("'script.Plugin' плагин для типа '%s' не найден", script.PluginType)
 	}
@@ -48,7 +50,10 @@ type Check struct {
 	Component  map[string]interface{} `yaml:"component"`
 }
 
-func (c *Check) CheckValideData(check Check) error {
+func (c *Check) CheckValideData(check Check) (*v1.Check, *v1.Component, error) {
+
+	var pluginCheck v1.Check
+	var pluginComponent v1.Component
 
 	ctx := context.TODO()
 
@@ -56,29 +61,34 @@ func (c *Check) CheckValideData(check Check) error {
 
 	executor, ok := pc.ExecutorPluginRegistry[check.PluginType]
 	if !ok {
-		return fmt.Errorf("'component.Plugin' плагин для типа '%s' не найден", check.PluginType)
+		return nil, nil, fmt.Errorf("'component.Plugin' плагин для типа '%s' не найден", check.PluginType)
 	}
 
-	if v1Action, err := executor.GetAction(check.Actions); err == nil {
+	if pluginCheck, err := executor.GetCheck(check.Actions); err == nil {
 		// Проверяем данные
-		if err := executor.ValidateYAMLAction(ctx, v1Action); err != nil {
-			return fmt.Errorf("ошибка валидации данных: %v", err)
+		if err := executor.ValidateYAMLCheck(ctx, pluginCheck); err != nil {
+			return nil, nil, fmt.Errorf("ошибка валидации данных: %v", err)
 		}
 	}
 
 	component, err := c.Set.StandsFile.FindComponent(c.Component)
 	if err != nil {
-		return err
-	}
-	componentErr := executor.ValidateYAMLComponent(component)
-	if componentErr != nil {
-		return err
+		return nil, nil, err
 	}
 
-	return nil
+	if pluginComponent, err := executor.GetComponent(component); err == nil {
+		componentErr := executor.ValidateYAMLComponent(pluginComponent)
+		if componentErr != nil {
+			return nil, nil, err
+		}
+	} else {
+		return nil, nil, err
+	}
+
+	return &pluginCheck, &pluginComponent, nil
 }
 
-func (c *Check) ExecCheck(item interface{}, stageName string) error {
+func (c *Check) ExecCheck(item Check, stageName string) error {
 
 	ctx := context.TODO()
 
@@ -94,34 +104,17 @@ func (c *Check) ExecCheck(item interface{}, stageName string) error {
 		val = val.Elem()
 	}
 
-	componentData := val.FieldByName("Component").Interface().(map[string]interface{})
-	//actionData := val.FieldByName("Actions").Interface().(map[string]interface{})
-
-	var v1Action v1.Action
-	var v1Check v1.Check
-	var v1Component v1.Component
-
 	// Проверяем данные
-	if err := executor.ValidateYAMLAction(ctx, v1Action); err != nil {
-		return fmt.Errorf("ошибка валидации данных: %v", err)
-	}
-
-	// Проверяем данные
-	if err := executor.ValidateYAMLComponent(componentData); err != nil {
-		return fmt.Errorf("ошибка валидации данных: %v", err)
+	pluginCheck, pluginComponent, CheckValidErr := c.CheckValideData(item)
+	if CheckValidErr != nil {
+		return fmt.Errorf("ошибка валидации данных: %v", CheckValidErr)
 	}
 
 	// Выполняем действие
-	//ctx := context.TODO() // Контекст можно адаптировать под требования
-	if _, err := executor.ExecuteCheck(ctx, v1Component, v1Check); err != nil {
-		status := executor.GetStatus()
-		logMessage("ERROR", fmt.Sprintf("[%s] Action failed: %s", stageName, status.Message))
+	if _, err := executor.ExecCheck(ctx, *pluginComponent, *pluginCheck); err != nil {
 		return err
 	}
 
-	// Получаем статус и логируем результат
-	status := executor.GetStatus()
-	logMessage("INFO", fmt.Sprintf("[%s] Action completed: %s", stageName, status.Message))
 	return nil
 }
 
@@ -151,16 +144,5 @@ func (t *Task) ExecTask(item interface{}, stageName string) error {
 
 func (t *Task) CheckValideData(task Task) error {
 
-	executor, ok := PluginRegistry[task.PluginType]
-	if !ok {
-		return fmt.Errorf("'component.Plugin' плагин для типа '%s' не найден", task.PluginType)
-	}
-	// Проверяем данные
-	if err := executor.ValidateYAML(task.Actions); err != nil {
-		return fmt.Errorf("ошибка валидации данных: %v", err)
-	}
 	return nil
 }
-
-// PluginRegistry - глобальная карта для хранения зарегистрированных плагинов
-var PluginRegistry = make(map[string]v1.Executor)

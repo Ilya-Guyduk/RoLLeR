@@ -6,6 +6,7 @@ import (
 )
 
 type Component struct {
+	Set             *MigrationSet
 	Name            string                 `yaml:"name"`
 	Version         string                 `yaml:"version"`
 	Group           string                 `yaml:"group"` // Имя группы
@@ -16,29 +17,36 @@ type Component struct {
 func (c *Component) CheckValideData(component Component) error {
 
 	fmt.Printf("[Component] Start valide\n")
+	/*
+		if component.Name == "" {
+			return fmt.Errorf("'component.Name' name is empty")
+		}
 
-	if component.Name == "" {
-		return fmt.Errorf("'component.Name' name is empty")
-	}
+		if component.Version == "" {
+			return fmt.Errorf("'component.Version' name is empty")
+		}
 
-	if component.Version == "" {
-		return fmt.Errorf("'component.Version' name is empty")
-	}
+		if component.Plugin == "" {
+			return fmt.Errorf("'component.Plugin' name is empty")
+		}
 
-	if component.Plugin == "" {
-		return fmt.Errorf("'component.Plugin' name is empty")
-	}
+		if component.Group == "" {
+			return fmt.Errorf("'component.Group' Group is empty")
+		}
+	*/
+	pc := c.Set.PluginController
 
-	if component.Group == "" {
-		return fmt.Errorf("'component.Group' Group is empty")
-	}
-	executor, ok := PluginRegistry[component.Plugin]
+	executor, ok := pc.ExecutorPluginRegistry[component.Plugin]
 	if !ok {
 		return fmt.Errorf("'component.Plugin' плагин для типа '%s' не найден", component.Plugin)
 	}
-	// Проверяем данные
-	if err := executor.ValidateYAMLComponent(component.ComponentConfig); err != nil {
-		return fmt.Errorf("ошибка валидации данных: %v", err)
+	if pluginComponent, err := executor.GetComponent(c.ComponentConfig); err == nil {
+		componentErr := executor.ValidateYAMLComponent(pluginComponent)
+		if componentErr != nil {
+			return err
+		}
+	} else {
+		return err
 	}
 	return nil
 }
@@ -65,10 +73,6 @@ func (s *Stand) CheckValideData(stand Stand) error {
 
 	if stand.Name == "" {
 		return fmt.Errorf("'stand.Name' name is empty")
-	}
-
-	if stand.Group == "" {
-		return fmt.Errorf("'stand.Group' Group is empty")
 	}
 
 	// Проверка уникальности имен компонентов

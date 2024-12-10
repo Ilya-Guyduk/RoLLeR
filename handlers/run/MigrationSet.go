@@ -50,8 +50,13 @@ func (mg *MigrationSet) InitMigrationSet(migrationYamlFile string, pluginControl
 
 	// Создаем новый экземпляр MigrationSet с заполненными данными.
 	newMg := &MigrationSet{
-		StandsFile:       stand,
-		PluginController: pluginController,
+		StandsFile:          stand,
+		PluginController:    pluginController,
+		MigrationSetVersion: migrationSet.MigrationSetVersion,
+		Atomic:              migrationSet.Atomic,
+		FromRelease:         migrationSet.FromRelease,
+		ToRelease:           migrationSet.ToRelease,
+		Stages:              migrationSet.Stages,
 	}
 
 	return newMg, nil
@@ -60,6 +65,10 @@ func (mg *MigrationSet) InitMigrationSet(migrationYamlFile string, pluginControl
 func (ms *MigrationSet) CheckValideData(migrationSet MigrationSet) error {
 
 	fmt.Printf("[MigrationSet] Start valide\n")
+
+	if migrationSet.FromRelease == "" {
+		return fmt.Errorf("[MigrationSet] from_release is empty")
+	}
 
 	/*/ Валидация версий миграции и файла стендов
 	if migrationSet.Migration.msVersion != MS_VERSION || migrationSet.Stands.msVersion != MS_VERSION {

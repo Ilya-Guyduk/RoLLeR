@@ -22,15 +22,15 @@ type Plugin interface {
 
 // Component represents the configuration
 // or resource required to execute an action or check.
-type Component struct{}
+type Component interface{}
 
 // Action represents a specific operation
 // to be executed by the plugin.
-type Action struct{}
+type Action interface{}
 
 // Check represents a validation or
 // state-checking operation.
-type Check struct{}
+type Check interface{}
 
 // ActionService defines methods for handling actions within the plugin.
 type ActionService interface {
