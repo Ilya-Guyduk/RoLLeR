@@ -13,28 +13,16 @@ stand:
   components:
   - name: "prod1"
     version: "1.12.0"
-    plugin: "ssh_plugin"
+    plugin: "SSH Plugin"
     group: "prod-postgres"
     config:
       host: "192.168.1.222"
       port: 22
-      user: "warki"
+      username: "warki"
       password: "1604"
-  - name: "prodd2"
-    version: "1.12.0"
-    plugin: kubernetes
-    config:
-      namespace: "client-profile-prod"
-      group: "prod-k8s"
-      endpoints:
-        release_name: "mdm-adapter"
-  - name: "prqod"
-    plugin: kubernetes
-    config:
-      group: "prod-postgres"
-      host:
-      port:
-      user:
-      password:
+
+
+
+
 
     

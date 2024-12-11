@@ -7,6 +7,7 @@ import (
 	//"plugin"
 	"reflect"
 
+	"github.com/Ilya-Guyduk/RoLLeR/handlers/plugin"
 	v1 "github.com/Ilya-Guyduk/RoLLeR/pei/v1"
 )
 
@@ -50,33 +51,39 @@ type Check struct {
 	Component  map[string]interface{} `yaml:"component"`
 }
 
-func (c *Check) CheckValideData(check Check) (*v1.Check, *v1.Component, error) {
+func (c *Check) CheckValideData(check Check, pc *plugin.PluginController, stands *StandsFile) (*v1.Check, *v1.Component, error) {
+
+	logMessage("DEBUG", fmt.Sprintf("[Check > %s] Check valide...", check.Name))
 
 	var pluginCheck v1.Check
 	var pluginComponent v1.Component
 
 	ctx := context.TODO()
 
-	pc := c.Set.PluginController
-
+	logMessage("DEBUG", fmt.Sprintf("[Check > %s] Check executor for %s", check.Name, check.PluginType))
 	executor, ok := pc.ExecutorPluginRegistry[check.PluginType]
 	if !ok {
 		return nil, nil, fmt.Errorf("'component.Plugin' плагин для типа '%s' не найден", check.PluginType)
 	}
 
+	logMessage("DEBUG", fmt.Sprintf("[Check > %s] GetCheck object for %s", check.Name, check.PluginType))
 	if pluginCheck, err := executor.GetCheck(check.Actions); err == nil {
-		// Проверяем данные
+		logMessage("DEBUG", fmt.Sprintf("[Check > %s] Validate Check object for %s", check.Name, check.PluginType))
 		if err := executor.ValidateYAMLCheck(ctx, pluginCheck); err != nil {
 			return nil, nil, fmt.Errorf("ошибка валидации данных: %v", err)
+		} else {
+			logMessage("INFO", fmt.Sprintf("[Check > %s] Validate Check for '%s' succes!", check.Name, check.PluginType))
 		}
 	}
-
-	component, err := c.Set.StandsFile.FindComponent(c.Component)
+	logMessage("DEBUG", fmt.Sprintf("[Check > %s] Find component for %s", check.Name, check.PluginType))
+	logMessage("DEBUG", fmt.Sprintf("[Check > %s] Component %s", check.Name, check.Component))
+	component, err := stands.FindComponent(check.Component)
 	if err != nil {
 		return nil, nil, err
 	}
-
+	logMessage("DEBUG", fmt.Sprintf("[Check > %s] GetComponent for Check for %s", check.Name, check.PluginType))
 	if pluginComponent, err := executor.GetComponent(component); err == nil {
+		logMessage("DEBUG", fmt.Sprintf("[Check > %s] Validate Component object for %s", check.Name, check.PluginType))
 		componentErr := executor.ValidateYAMLComponent(pluginComponent)
 		if componentErr != nil {
 			return nil, nil, err
@@ -88,31 +95,35 @@ func (c *Check) CheckValideData(check Check) (*v1.Check, *v1.Component, error) {
 	return &pluginCheck, &pluginComponent, nil
 }
 
-func (c *Check) ExecCheck(item Check, stageName string) error {
+func (c *Check) ExecCheck(check Check, stageName string, pc *plugin.PluginController, stands *StandsFile) error {
 
-	ctx := context.TODO()
+	logMessage("INFO", fmt.Sprintf("[Check > %s] Starting Check...", check.Name))
+	ctx := context.Background()
 
-	// Найти плагин
-	executor, err := c.Set.PluginController.FindExecutorPlugin(c.PluginType)
+	logMessage("DEBUG", fmt.Sprintf("[Check > %s] Check executor", check.Name))
+	executor, ok := pc.ExecutorPluginRegistry[check.PluginType]
+	if !ok {
+		return fmt.Errorf("'Check.Plugin' плагин для типа '%s' не найден", check.PluginType)
+	} else {
+		pluginInfo, err := executor.GetInfo()
+		if err == nil {
+			logMessage("INFO", fmt.Sprintf("[Check > %s] Plugin: '%s'. Version: %s", check.Name, pluginInfo.Name, pluginInfo.Version))
+			logMessage("DEBUG", fmt.Sprintf("[Check > %s] Plugin: '%s'. Desc: %s", check.Name, pluginInfo.Name, pluginInfo.Description))
+		} else {
+			return err
+		}
+	}
+
+	v1Check, v1Compomemt, err := check.CheckValideData(check, pc, stands)
 	if err != nil {
 		return err
-	}
-
-	// Получаем данные локации и действия
-	val := reflect.ValueOf(item)
-	if val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
-
-	// Проверяем данные
-	pluginCheck, pluginComponent, CheckValidErr := c.CheckValideData(item)
-	if CheckValidErr != nil {
-		return fmt.Errorf("ошибка валидации данных: %v", CheckValidErr)
-	}
-
-	// Выполняем действие
-	if _, err := executor.ExecCheck(ctx, *pluginComponent, *pluginCheck); err != nil {
-		return err
+	} else {
+		checkCode, err := executor.ExecCheck(ctx, v1Compomemt, v1Check)
+		if err != nil {
+			return nil
+		} else if !checkCode {
+			logMessage("ERROR", "checkCode is False")
+		}
 	}
 
 	return nil

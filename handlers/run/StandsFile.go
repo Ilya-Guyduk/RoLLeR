@@ -2,7 +2,10 @@ package run
 
 import (
 	"fmt"
+	//"plugin"
 	"reflect"
+
+	"github.com/Ilya-Guyduk/RoLLeR/handlers/plugin"
 )
 
 type Component struct {
@@ -14,34 +17,33 @@ type Component struct {
 	ComponentConfig map[string]interface{} `yaml:"config"`
 }
 
-func (c *Component) CheckValideData(component Component) error {
+func (c *Component) CheckValideData(component Component, pc *plugin.PluginController) error {
 
-	fmt.Printf("[Component] Start valide\n")
-	/*
-		if component.Name == "" {
-			return fmt.Errorf("'component.Name' name is empty")
-		}
+	logMessage("DEBUG", fmt.Sprintf("[Component > %s] Check valide...", component.Name))
 
-		if component.Version == "" {
-			return fmt.Errorf("'component.Version' name is empty")
-		}
+	if component.Version == "" {
+		return fmt.Errorf("'component.Version' name is empty")
+	}
 
-		if component.Plugin == "" {
-			return fmt.Errorf("'component.Plugin' name is empty")
-		}
+	if component.Plugin == "" {
+		return fmt.Errorf("'component.Plugin' name is empty")
+	}
 
-		if component.Group == "" {
-			return fmt.Errorf("'component.Group' Group is empty")
-		}
-	*/
-	pc := c.Set.PluginController
+	if component.Group == "" {
+		return fmt.Errorf("'component.Group' Group is empty")
+	}
 
+	logMessage("DEBUG", fmt.Sprintf("[Component > %s] Check executor in ExecutorPluginRegistry...", component.Name))
 	executor, ok := pc.ExecutorPluginRegistry[component.Plugin]
 	if !ok {
 		return fmt.Errorf("'component.Plugin' плагин для типа '%s' не найден", component.Plugin)
 	}
+	info, _ := executor.GetInfo()
+	logMessage("DEBUG", fmt.Sprintf("[Component > %s] Get component for Plugin: %s", component.Name, info.Name))
 	if pluginComponent, err := executor.GetComponent(c.ComponentConfig); err == nil {
+		logMessage("DEBUG", fmt.Sprintf("[Component > %s] Validate component for Plugin: %s", component.Name, info.Name))
 		componentErr := executor.ValidateYAMLComponent(pluginComponent)
+		logMessage("DEBUG", fmt.Sprintf("[Component > %s] component %s validate with Plugin: %s", component.Name, info.Name, component.Name))
 		if componentErr != nil {
 			return err
 		}
@@ -67,13 +69,14 @@ type Stand struct {
 	Component   []Component `yaml:"components"`
 }
 
-func (s *Stand) CheckValideData(stand Stand) error {
+func (s *Stand) CheckValideData(stand Stand, pc *plugin.PluginController) error {
 
-	fmt.Printf("[Stand] Start valide\n")
+	logMessage("DEBUG", fmt.Sprintf("[Stand > %s] Check valide stand...", stand.Name))
 
 	if stand.Name == "" {
 		return fmt.Errorf("'stand.Name' name is empty")
 	}
+	logMessage("DEBUG", fmt.Sprintf("[Stand > %s] stand.Name - %s", stand.Name, stand.Name))
 
 	// Проверка уникальности имен компонентов
 	nameSet := make(map[string]bool)
@@ -89,8 +92,9 @@ func (s *Stand) CheckValideData(stand Stand) error {
 		}
 		nameSet[component.Name] = true
 
+		logMessage("DEBUG", fmt.Sprintf("[Stand > %s] Starting valide for component %s...", stand.Name, component.Name))
 		// Проверяем остальные данные компонента
-		componentErr := component.CheckValideData(component)
+		componentErr := component.CheckValideData(component, pc)
 		if componentErr != nil {
 			return componentErr
 		}
@@ -111,12 +115,13 @@ type StandsFile struct {
 	Stand     Stand  `yaml:"stand"`
 }
 
-func (s *StandsFile) FindComponent(data interface{}) (map[string]interface{}, error) {
+func (s *StandsFile) FindComponent(data map[string]interface{}) (map[string]interface{}, error) {
+	logMessage("DEBUG", "[StandsFile] Find Component...")
 
-	// Проверяем, является ли входное значение строкой
-	searchKey, ok := data.(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid input type: expected string")
+	// Проверяем наличие ключа "name" в данных
+	searchKey, ok := data["name"].(string)
+	if !ok || searchKey == "" {
+		return nil, fmt.Errorf("invalid input: 'name' field is required and must be a string")
 	}
 
 	// Преобразователь в map[string]interface{}
@@ -124,6 +129,9 @@ func (s *StandsFile) FindComponent(data interface{}) (map[string]interface{}, er
 		result := make(map[string]interface{})
 		// Используем рефлексию для преобразования
 		objValue := reflect.ValueOf(obj)
+		if objValue.Kind() == reflect.Ptr {
+			objValue = objValue.Elem()
+		}
 		if objValue.Kind() != reflect.Struct {
 			return nil, fmt.Errorf("cannot convert non-struct type to map")
 		}
@@ -141,9 +149,11 @@ func (s *StandsFile) FindComponent(data interface{}) (map[string]interface{}, er
 		return convertToMap(s.Stand)
 	}
 
-	// Поиск стенда по группе
-	if s.Stand.Group == searchKey {
-		return convertToMap(s.Stand)
+	// Поиск стенда по группе, если указан "group" в данных
+	if groupKey, ok := data["group"].(string); ok && groupKey != "" {
+		if s.Stand.Group == groupKey {
+			return convertToMap(s.Stand)
+		}
 	}
 
 	// Поиск по компонентам внутри стенда
@@ -153,8 +163,8 @@ func (s *StandsFile) FindComponent(data interface{}) (map[string]interface{}, er
 			return convertToMap(component)
 		}
 
-		// Сравнение группы компонента
-		if component.Group == searchKey {
+		// Сравнение группы компонента, если указано
+		if groupKey, ok := data["group"].(string); ok && component.Group == groupKey {
 			return convertToMap(component)
 		}
 	}
@@ -163,9 +173,9 @@ func (s *StandsFile) FindComponent(data interface{}) (map[string]interface{}, er
 	return nil, fmt.Errorf("no component, group, or stand found with name: '%s'", searchKey)
 }
 
-func (s *StandsFile) CheckValideData(standsFile StandsFile) error {
+func (s *StandsFile) CheckValideData(standsFile StandsFile, pc *plugin.PluginController) error {
 
-	fmt.Printf("[StandsFile] Start valide\n")
+	logMessage("DEBUG", fmt.Sprintf("[StandsFile] Check valide..."))
 	/*
 		if standsFile.msVersion == "" {
 			return fmt.Errorf("'standsFile.msVersion' msVersion is empty")
@@ -175,8 +185,8 @@ func (s *StandsFile) CheckValideData(standsFile StandsFile) error {
 			return fmt.Errorf("'standsFile.Release' Release is empty")
 		}
 	*/
-	fmt.Printf("[StandsFile] Starting valide Stand\n")
-	standErr := standsFile.Stand.CheckValideData(standsFile.Stand)
+	logMessage("DEBUG", fmt.Sprintf("[StandsFile] Starting valide Stand"))
+	standErr := standsFile.Stand.CheckValideData(standsFile.Stand, pc)
 	if standErr != nil {
 		return standErr
 	}

@@ -82,25 +82,26 @@ func HandleRun(args []string) error {
 	if pluginErr != nil {
 		logMessage("ERROR", fmt.Sprintf("Error InitPluginController: %s", pluginErr))
 	} else {
-		logMessage("DEBUG", fmt.Sprintf("PluginController: %s", pc))
+		logMessage("DEBUG", fmt.Sprintf("PluginController => Version: %s, DefaultRepository: %s, LocalRepositoryPath: %s", pc.ControllerVersion, pc.DefaultRepository, pc.LocalRepositoryPath))
 	}
 
 	var migrationSet *MigrationSet
 	// Инициализация MigrationSet
-	logMessage("INFO", fmt.Sprintf("Creating MigrationSet: %s, %s", migrationPath, pc))
+	logMessage("INFO", fmt.Sprintf("Creating MigrationSet: %s", migrationPath))
 	migrationSet, migrationErr := migrationSet.InitMigrationSet(*migrationPath, pc)
 	if migrationErr != nil {
 		logMessage("ERROR", fmt.Sprintf("Error InitMigrationSet: %s", migrationErr))
 	}
 
 	// Каскадная валидация миграции
-	logMessage("INFO", fmt.Sprintf(" Starting migrationSet.CheckValideData"))
+	logMessage("INFO", fmt.Sprintf("Starting CheckValideData"))
 	validErr := migrationSet.CheckValideData(*migrationSet)
 	if validErr != nil {
 		logMessage("ERROR", fmt.Sprintf("Error CheckValideData: %s", validErr))
 	}
 
-	updateErr := migrationSet.UpdateRelease(*migrationSet)
+	logMessage("INFO", fmt.Sprintf("Starting UpdateRelease"))
+	updateErr := migrationSet.UpdateRelease(migrationSet)
 	if updateErr != nil {
 		logMessage("ERROR", fmt.Sprintf("Error UpdateRelease: %s", updateErr))
 	}

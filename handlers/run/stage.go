@@ -2,12 +2,14 @@ package run
 
 import (
 	"fmt"
+
+	"github.com/Ilya-Guyduk/RoLLeR/handlers/plugin"
 )
 
 var ATOMIC_STAGE *bool // Глобальный флаг атомарности текущего этапа
 // Stage представляет этап обработки с его параметрами.
 type Stages struct {
-	Set         *MigrationSet
+	//Set         *MigrationSet
 	Name        string      `yaml:"name"`       // Имя этапа
 	Description string      `yaml:"desc"`       // Описание этапа
 	Dependence  interface{} `yaml:"dependence"` // Зависимости этапа
@@ -21,7 +23,9 @@ type Stages struct {
 	Stages      *[]Stages   `yaml:"stage"`        // Шаги, которые входят в этот этап
 }
 
-func (s *Stages) CheckValideData(stage Stages) error {
+func (s *Stages) CheckValideData(stage Stages, pc *plugin.PluginController, stands *StandsFile) error {
+
+	logMessage("DEBUG", fmt.Sprintf("[Stages > %s] Check valide...", stage.Name))
 
 	//Валидация вложенных этапов, если они есть
 	if len(*stage.PreCheck) != 0 {
@@ -39,12 +43,15 @@ func (s *Stages) CheckValideData(stage Stages) error {
 			}
 			nameSet[PreCheck.Name] = true
 
+			logMessage("DEBUG", fmt.Sprintf("[Stages > %s] Starting check PreCheck %s...", stage.Name, PreCheck.Name))
 			// Проверяем остальные данные компонента
-			_, _, PreCheckErr := PreCheck.CheckValideData(PreCheck)
+			_, _, PreCheckErr := PreCheck.CheckValideData(PreCheck, pc, stands)
 			if PreCheckErr != nil {
 				return PreCheckErr
 			}
 		}
+	} else {
+		logMessage("DEBUG", fmt.Sprintf("[Stages > %s] Missing PreCheck...", stage.Name))
 	}
 
 	//Валидация вложенных этапов, если они есть
@@ -88,7 +95,7 @@ func (s *Stages) CheckValideData(stage Stages) error {
 			nameSet[Stage.Name] = true
 
 			// Проверяем остальные данные компонента
-			componentErr := Stage.CheckValideData(Stage)
+			componentErr := Stage.CheckValideData(Stage, pc, stands)
 			if componentErr != nil {
 				return componentErr
 			}
@@ -112,7 +119,7 @@ func (s *Stages) CheckValideData(stage Stages) error {
 			nameSet[PreCheck.Name] = true
 
 			// Проверяем остальные данные компонента
-			_, _, componentErr := PreCheck.CheckValideData(PreCheck)
+			_, _, componentErr := PreCheck.CheckValideData(PreCheck, pc, stands)
 			if componentErr != nil {
 				return componentErr
 			}
@@ -146,6 +153,7 @@ func (s *Stages) CheckValideData(stage Stages) error {
 }
 
 func (s *Stages) CheckMyAtomic(stageName string, myAtomic *bool, parentAtomic *bool) *bool {
+	var atomFlag *bool = new(bool)
 
 	// Проверяем флаги `stage.Atomic` и `parentAtomic`
 	stageAtomicSpecified, stageAtomicValue := isFlagSpecified(myAtomic)
@@ -155,33 +163,33 @@ func (s *Stages) CheckMyAtomic(stageName string, myAtomic *bool, parentAtomic *b
 	switch {
 	case stageAtomicSpecified && !stageAtomicValue:
 		// Если указано, что текущий этап не атомарный
-		logMessage("DEBUG", fmt.Sprintf("[%s] STAGE Atomic explicitly set to false", stageName))
-		*ATOMIC_STAGE = false
+		logMessage("DEBUG", fmt.Sprintf("[Stage > %s] STAGE Atomic explicitly set to false", stageName))
+		*atomFlag = false
 
 	case !parentAtomicSpecified && !stageAtomicSpecified:
 		// Ни родительский, ни текущий флаги не указаны
-		logMessage("DEBUG", fmt.Sprintf("[%s] STAGE and Parent: Atomic flags are not specified", stageName))
-		*ATOMIC_STAGE = false // По умолчанию не атомарный
+		logMessage("DEBUG", fmt.Sprintf("[Stage > %s] STAGE and Parent: Atomic flags are not specified", stageName))
+		*atomFlag = false // По умолчанию не атомарный
 
 	case !parentAtomicSpecified && stageAtomicSpecified:
 		// Указан только текущий флаг
-		logMessage("DEBUG", fmt.Sprintf("[%s] STAGE Atomic specified: %v, Parent: N/A", stageName, stageAtomicValue))
-		*ATOMIC_STAGE = stageAtomicValue
+		logMessage("DEBUG", fmt.Sprintf("[Stage > %s] STAGE Atomic specified: %v, Parent: N/A", stageName, stageAtomicValue))
+		*atomFlag = stageAtomicValue
 
 	case parentAtomicSpecified && !stageAtomicSpecified:
 		// Указан только родительский флаг
-		logMessage("DEBUG", fmt.Sprintf("[%s]STAGE: Atomic flag not specified, Parent Atomic: %v", stageName, parentAtomicValue))
-		*ATOMIC_STAGE = parentAtomicValue
+		logMessage("DEBUG", fmt.Sprintf("[Stage > %s]STAGE: Atomic flag not specified, Parent Atomic: %v", stageName, parentAtomicValue))
+		*atomFlag = parentAtomicValue
 
 	case parentAtomicSpecified && stageAtomicSpecified:
 		// Указаны оба флага
-		logMessage("DEBUG", fmt.Sprintf("[%s] STAGE Atomic: %v, Parent Atomic: %v", stageName, stageAtomicValue, parentAtomicValue))
-		*ATOMIC_STAGE = parentAtomicValue && stageAtomicValue
+		logMessage("DEBUG", fmt.Sprintf("[Stage > %s] STAGE Atomic: %v, Parent Atomic: %v", stageName, stageAtomicValue, parentAtomicValue))
+		*atomFlag = parentAtomicValue && stageAtomicValue
 	}
 
 	// Выводим итоговое значение атомарности
-	logMessage("INFO", fmt.Sprintf("[%s] ATOMIC_STAGE: %v", stageName, *ATOMIC_STAGE))
-	return ATOMIC_STAGE
+	logMessage("INFO", fmt.Sprintf("[Stage > %s] ATOMIC_STAGE: %v", stageName, atomFlag))
+	return atomFlag
 }
 
 func (s *Stages) setName(parentName string, currentName string) string {
@@ -197,23 +205,38 @@ func (s *Stages) setName(parentName string, currentName string) string {
 	return stageName
 }
 
-func (s *Stages) ExecStage(stage Stages, stands StandsFile, ActionMap map[string]ActionMap, parentAtomic *bool, parentName string) error {
+func (s *Stages) ExecStage(stage Stages, ms *MigrationSet, parentAtomic *bool, parentName string) error {
 	// Создаём локальную переменную для хранения атомарности текущего этапа
 	//var ATOMIC_STAGE = new(bool)
 	stageName := s.setName(parentName, stage.Name)
-	descriptor(stage)
+
+	logMessage("INFO", fmt.Sprintf("========== Start stage: %s ==========", stage.Name))
+
+	// Если указано описание этапа, выводим его в лог
+	if stage.Description != "" {
+		logMessage("INFO", fmt.Sprintf("========== %s", stage.Description))
+	}
 
 	// Проверяем и вычисляем атомарность этапа
+	logMessage("DEBUG", fmt.Sprintf("[Stage > %s] Check Atomic", stageName))
 	MY_ATOMIC_STAGE := stage.CheckMyAtomic(stageName, stage.Atomic, parentAtomic)
 
 	// Шаг 1: Выполняем PreCheck, если он указан
 	if stage.PreCheck != nil {
-		logMessage("INFO", fmt.Sprintf("[%s] Executing PreCheck...", stageName))
+
+		logMessage("INFO", fmt.Sprintf("[Stage > %s] Start ExecCheck", stageName))
 		for _, PreCheck := range *stage.PreCheck {
-			if err := PreCheck.ExecCheck(PreCheck, stageName); err != nil {
+
+			if err := PreCheck.ExecCheck(PreCheck, stageName, ms.PluginController, ms.StandsFile); err != nil {
+
 				logMessage("ERROR", fmt.Sprintf("[%s] PreCheck failed: %v", stageName, err))
-				if *MY_ATOMIC_STAGE {
-					return err
+				return err
+
+			} else {
+
+				_, err := ms.PutAction(PreCheck.Name, PreCheck.Actions, PreCheck.Component)
+				if err != nil {
+					return nil
 				}
 			}
 		}
@@ -235,7 +258,7 @@ func (s *Stages) ExecStage(stage Stages, stands StandsFile, ActionMap map[string
 	// Шаг 3: Выполняем вложенные этапы, если они есть
 	for _, subStage := range *stage.Stages {
 		logMessage("INFO", fmt.Sprintf("[%s] Processing sub-stage: %s", stageName, subStage.Name))
-		if err := s.ExecStage(subStage, stands, ActionMap, MY_ATOMIC_STAGE, stageName); err != nil {
+		if err := s.ExecStage(subStage, ms, MY_ATOMIC_STAGE, stageName); err != nil {
 			logMessage("ERROR", fmt.Sprintf("[%s] Sub-stage %s failed: %v", stageName, subStage.Name, err))
 			if *MY_ATOMIC_STAGE {
 				return err
@@ -271,7 +294,7 @@ func (s *Stages) ExecStage(stage Stages, stands StandsFile, ActionMap map[string
 	if stage.PostCheck != nil {
 		logMessage("INFO", fmt.Sprintf("[%s] Executing PostCheck...", stageName))
 		for _, PostCheck := range *stage.PostCheck {
-			if err := PostCheck.ExecCheck(PostCheck, stageName); err != nil {
+			if err := PostCheck.ExecCheck(PostCheck, stageName, ms.PluginController, ms.StandsFile); err != nil {
 				logMessage("ERROR", fmt.Sprintf("[%s] PostCheck failed: %v", stageName, err))
 				if *MY_ATOMIC_STAGE {
 					return err
@@ -282,15 +305,6 @@ func (s *Stages) ExecStage(stage Stages, stands StandsFile, ActionMap map[string
 
 	logMessage("INFO", fmt.Sprintf("[%s] Stage completed successfully.", stageName))
 	return nil
-}
-
-func descriptor(stage Stages) {
-	logMessage("INFO", fmt.Sprintf("========== Start stage: %s ==========", stage.Name))
-
-	// Если указано описание этапа, выводим его в лог
-	if stage.Description != "" {
-		logMessage("INFO", fmt.Sprintf("========== %s", stage.Description))
-	}
 }
 
 func isFlagSpecified(flag *bool) (bool, bool) {

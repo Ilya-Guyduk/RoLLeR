@@ -4,6 +4,8 @@ github.com/Ilya-Guyduk/RoLLeR/pei v0.0.0-20241208163340-7d3b9dbd1720 h1:XilUcJyL
 github.com/Ilya-Guyduk/RoLLeR/pei v0.0.0-20241208163340-7d3b9dbd1720/go.mod h1:2edFuXp5VymhjmfdyzQtk1XomikL1ZDJ4g/cwgzIwNo=
 github.com/Ilya-Guyduk/RoLLeR/pei v0.0.0-20241210081410-a556faa83c34 h1:k1ODG/Xryf5j2sl+i0mKFbh5ZDir0Qdp0srZDLkhbHI=
 github.com/Ilya-Guyduk/RoLLeR/pei v0.0.0-20241210081410-a556faa83c34/go.mod h1:2edFuXp5VymhjmfdyzQtk1XomikL1ZDJ4g/cwgzIwNo=
+github.com/Ilya-Guyduk/RoLLeR/pei v0.0.0-20241210104825-1d19b6583a21 h1:Lem2epXadz0C8QNHpEV/e195DDKFdiMqasSqJOKjhkc=
+github.com/Ilya-Guyduk/RoLLeR/pei v0.0.0-20241210104825-1d19b6583a21/go.mod h1:2edFuXp5VymhjmfdyzQtk1XomikL1ZDJ4g/cwgzIwNo=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

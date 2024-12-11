@@ -10,11 +10,11 @@ stages:
   atomic: false
   pre_check: 
   - name: "test1"
-    plugin: 'ssh_plugin'
+    plugin: 'SSH Plugin'
     component: 
-      group: "prod-postgres"
+      name: "prod1"
     action:
-      bash: "ls -asl /"
+      command: "ls -asl /"
     retries: 3
     interval: 10s
   stages:  
@@ -23,11 +23,11 @@ stages:
     atomic: false # Флаг атомарности обновления
     pre_check: 
     - name: "test2"
-      plugin: 'ssh_plugin'
+      plugin: 'SSH Plugin'
       component: 
         group: "prod-postgres"
       action:
-        bash: "ls -asl /etc"
+        comand: "ls -asl /etc"
       retries: 3
       interval: 10s
     pre_script: 
@@ -38,7 +38,7 @@ stages:
         bash: "ls -asl /etc"
     task:
     - name: "task"
-      plugin: 'ssh_plugin'
+      plugin: 'SSH Plugin'
       to_version: "1.12.0"
       component:
         group: "prod-postgres"

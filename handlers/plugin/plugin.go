@@ -107,7 +107,10 @@ func (pc *PluginController) DeleteRepo(repoName string) error {
 }
 
 func (pc *PluginController) loadExecutorPlugins(pluginsPath string) (map[string]v1.Executor, error) {
-	executorPluginRegistry := make(map[string]v1.Executor)
+	// Инициализация карты, если она не была инициализирована
+	if pc.ExecutorPluginRegistry == nil {
+		pc.ExecutorPluginRegistry = make(map[string]v1.Executor)
+	}
 
 	err := filepath.Walk(pluginsPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -135,23 +138,25 @@ func (pc *PluginController) loadExecutorPlugins(pluginsPath string) (map[string]
 		}
 
 		// Преобразуем символ в функцию
-		executorFunc, ok := symbol.(func() v1.Executor)
+		newExecutorFunc, ok := symbol.(func() v1.Executor)
 		if !ok {
 			fmt.Printf("WARNING: NewExecutor в плагине %s не соответствует интерфейсу Executor\n", path)
 			return nil
 		}
 
 		// Создаем экземпляр плагина
-		pluginInstance := executorFunc()
-		pluginInfo, err := pluginInstance.GetInfo()
+		executorInstance := newExecutorFunc()
+
+		// Получаем информацию о плагине
+		pluginInfo, err := executorInstance.GetInfo()
 		if err != nil {
 			fmt.Printf("WARNING: Ошибка получения информации о плагине %s: %v\n", path, err)
 			return nil
 		}
 
 		// Добавляем плагин в реестр
-		executorPluginRegistry[pluginInfo.Name] = pluginInstance
-		fmt.Printf("INFO: Плагин %s успешно загружен.\n", pluginInfo.Name)
+		pc.ExecutorPluginRegistry[pluginInfo.Name] = executorInstance
+		fmt.Printf("Плагин %s успешно загружен.\n", pluginInfo.Name)
 
 		return nil
 	})
@@ -161,7 +166,7 @@ func (pc *PluginController) loadExecutorPlugins(pluginsPath string) (map[string]
 		fmt.Printf("WARNING: Ошибки при обходе плагинов в директории %s: %v\n", pluginsPath, err)
 	}
 
-	return executorPluginRegistry, nil
+	return pc.ExecutorPluginRegistry, nil
 }
 
 func (pc *PluginController) createAndCheckDir(dir string) error {
