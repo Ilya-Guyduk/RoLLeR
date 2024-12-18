@@ -3,8 +3,8 @@ global:
     level: "DEBUG"
     formatter: "default"
   plugin:
-    plugin_path: "./plugin"
-    plugin_repo_path: "./repo"
+    plugin_path: "./plugins"
+    plugin_repo_path: "./repos"
     default_repo: "RoLLeRHub"
   pei:
     version: "v1"

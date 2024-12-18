@@ -12,6 +12,20 @@ const (
 	MS_VERSION = "0.0.1"
 )
 
+var (
+	MS_MIN_EXEC_THREADS     int = 1
+	MS_MAX_EXEC_THREADS     int = 100
+	MS_DEFAULT_EXEC_THREADS int = 1
+)
+
+var (
+	STAGE_ORDER = "consistently"
+)
+
+var (
+	DEFAULT_SUPPORT_ROLLBACK = false
+)
+
 type ActionMap struct {
 	Name     string
 	Action   map[string]interface{}
@@ -31,25 +45,25 @@ type MigrationSet struct {
 }
 
 // Метод инициализации MigrationSet
-func (mg *MigrationSet) InitMigrationSet(migrationYamlFile string, pc *plugin.PluginController) (*MigrationSet, error) {
+func (mg *MigrationSet) NewMigrationSet(MigrationSetYamlFile string, pc *plugin.PluginController, logMessage func(string, string, ...interface{})) (*MigrationSet, error) {
 
-	logMessage("DEBUG", fmt.Sprintf("[MigrationSet] migration file: %s", migrationYamlFile))
+	logMessage("DEBUG", fmt.Sprintf("[MigrationSet]>[New] migration file: %s", MigrationSetYamlFile))
 
 	if pc == nil {
-		return nil, fmt.Errorf("[MigrationSet] pluginController is nil")
+		return nil, fmt.Errorf("[MigrationSet]>[New] pluginController is nil")
 	}
 
 	// Читаем миграционный файл.
 	migrationSet := &MigrationSet{}
-	err := unmarshalYamlFile(migrationYamlFile, migrationSet)
+	err := unmarshalYamlFile(MigrationSetYamlFile, migrationSet)
 	if err != nil {
-		return nil, fmt.Errorf("[MigrationSet] failed to unmarshal migration YAML file %s: %v", migrationSet, err)
+		return nil, fmt.Errorf("[MigrationSet]>[New] Unmarshal 'migration' YAML: %v: %v", migrationSet, err)
 	}
 	// Читаем файл стендов из конфигурации миграции.
 	stand := &StandsFile{}
 	err = unmarshalYamlFile(migrationSet.YAMLStandFile, stand)
 	if err != nil {
-		return nil, fmt.Errorf("[MigrationSet] failed to unmarshal stand YAML file %s: %v", stand, err)
+		return nil, fmt.Errorf("[MigrationSet]>[New] Unmarshal 'stands' YAML: %v", err)
 	}
 	// Создаем новый экземпляр MigrationSet с заполненными данными.
 	newMg := &MigrationSet{
@@ -66,71 +80,78 @@ func (mg *MigrationSet) InitMigrationSet(migrationYamlFile string, pc *plugin.Pl
 	return newMg, nil
 }
 
-func (ms *MigrationSet) CheckValideData(mSet MigrationSet) error {
+func (ms *MigrationSet) CascadeValidation(mSet MigrationSet, logMessage func(string, string, ...interface{})) error {
+	err := ms.ValidateMS(mSet)
+	if err != nil {
+		return err
+	}
 
-	logMessage("DEBUG", "[MigrationSet] Check valide...")
+	// Channel to receive errors from goroutines
+	errChan := make(chan error, len(mSet.Stages)+1) // Buffered channel to avoid deadlocks
+
+	// Start goroutine for StandsFile validation
+	go func() {
+		logMessage("INFO", "[MigrationSet]>[Valid] Start validation 'StandsFile'")
+		errChan <- mSet.StandsFile.CascadeValidation(*mSet.StandsFile, mSet.PluginController, logMessage)
+	}()
+
+	// Start goroutines for Stage validations
+	for _, Stage := range mSet.Stages {
+		go func(stage Stages) {
+			logMessage("INFO", fmt.Sprintf("[MigrationSet]>[Valid] Start validation 'Stage' '%s'", stage.Name))
+			errChan <- stage.CheckValideData(stage, mSet.PluginController, *mSet.StandsFile, logMessage)
+		}(Stage)
+	}
+
+	// Collect errors from goroutines
+	for i := 0; i < len(mSet.Stages)+1; i++ {
+		if err := <-errChan; err != nil {
+			return err // Return the first error encountered
+		}
+	}
+
+	close(errChan) // Close the channel when done
+	return nil
+}
+
+func (ms *MigrationSet) ValidateMS(mSet MigrationSet) error {
 
 	if mSet.StandsFile == nil {
-		return fmt.Errorf("[MigrationSet] StandsFile is empty")
+		return fmt.Errorf("[MigrationSet]>[Valid] 'StandsFile' is empty")
 	}
 	if mSet.PluginController == nil {
-		return fmt.Errorf("[MigrationSet] PluginController is empty")
+		return fmt.Errorf("[MigrationSet]>[Valid] 'PluginController' is empty")
 	}
 	if mSet.ActionMap == nil {
-		return fmt.Errorf("[MigrationSet] ActionMap is empty")
+		return fmt.Errorf("[MigrationSet]>[Valid] 'ActionMap' is empty")
 	}
 	if mSet.MigrationSetVersion == "" {
-		return fmt.Errorf("[MigrationSet] msVersion is empty")
+		return fmt.Errorf("[MigrationSet]>[Valid] 'msVersion' is empty")
 	}
 	if mSet.FromRelease == "" {
-		return fmt.Errorf("[MigrationSet] from_release is empty")
+		return fmt.Errorf("[MigrationSet]>[Valid] 'from_release' is empty")
 	}
 	if mSet.ToRelease == "" {
-		return fmt.Errorf("[MigrationSet] to_release is empty")
+		return fmt.Errorf("[MigrationSet]>[Valid] 'to_release' is empty")
 	}
 	if len(mSet.Stages) == 0 {
-		return fmt.Errorf("[MigrationSet] stages is empty")
-	}
-	logMessage("DEBUG", fmt.Sprintf("[MigrationSet] StandsFile:%s, ", mSet.StandsFile))
-	logMessage("DEBUG", fmt.Sprintf("[MigrationSet] PluginController => Version:%s, ", mSet.PluginController.ControllerVersion))
-	logMessage("DEBUG", fmt.Sprintf("[MigrationSet] msVersion:%s, atomic:%s, from_release:%s, to_release:%s, count stages:%s",
-		mSet.MigrationSetVersion,
-		mSet.Atomic,
-		mSet.FromRelease,
-		mSet.ToRelease,
-		len(mSet.Stages)))
-	/*/ Валидация версий миграции и файла стендов
-	if migrationSet.Migration.msVersion != MS_VERSION || migrationSet.Stands.msVersion != MS_VERSION {
-		return fmt.Errorf("Unsupported version. Migration: %s, Stands: %s", migrationSet.Migration.msVersion, migrationSet.Stands.msVersion)
-	} else {
-		fmt.Printf("[MigrationSet] correct version\n")
-	}*/
-
-	logMessage("DEBUG", fmt.Sprintf("[MigrationSet] Starting valide StandsFile"))
-	standsErr := mSet.StandsFile.CheckValideData(*mSet.StandsFile, mSet.PluginController)
-	if standsErr != nil {
-		return standsErr
-	}
-
-	for _, Stage := range mSet.Stages {
-		logMessage("DEBUG", fmt.Sprintf("[MigrationSet] Starting valide Stage %s", Stage.Name))
-		stageErr := Stage.CheckValideData(Stage, mSet.PluginController, mSet.StandsFile)
-		if stageErr != nil {
-			return stageErr
-		}
+		return fmt.Errorf("[MigrationSet]>[Valid] 'stages' is empty")
 	}
 
 	return nil
 }
 
-func (ms *MigrationSet) UpdateRelease(migrationSet *MigrationSet) error {
-	logMessage("DEBUG", fmt.Sprintf("[MigrationSet] Update Release %s => %s", migrationSet.FromRelease, migrationSet.ToRelease))
+func (ms *MigrationSet) UpdateRelease(mSet *MigrationSet, logMessage func(string, string, ...interface{})) error {
 
-	for _, stage := range migrationSet.Stages {
-		logMessage("DEBUG", fmt.Sprintf("[MigrationSet] Start ExecStage for %s", stage.Name))
-		err := stage.ExecStage(stage, migrationSet, migrationSet.Atomic, "")
+	logMessage("DEBUG", fmt.Sprintf("[MigrationSet]>[Update] Update Release '%s'=>'%s'", mSet.FromRelease, mSet.ToRelease))
+
+	for _, stage := range mSet.Stages {
+		logMessage("DEBUG", fmt.Sprintf("[MigrationSet]>[Update] Start ExecStage for %s", stage.Name))
+		err := stage.ExecStage(stage, mSet, mSet.Atomic, "", logMessage)
 		if err != nil {
 			return nil
+		} else {
+			return err
 		}
 
 	}
@@ -138,27 +159,58 @@ func (ms *MigrationSet) UpdateRelease(migrationSet *MigrationSet) error {
 	return nil
 }
 
-func (ms *MigrationSet) RollbackRelease(targetRelease string) error {
+func (ms *MigrationSet) RollbackRelease(targetRelease string, logMessage func(string, string, ...interface{})) error {
 
 	return nil
 }
 
-func (ms *MigrationSet) PutAction(Name string, Action map[string]interface{}, Rollback map[string]interface{}) (int, error) {
+func (ms *MigrationSet) PutAction(Name string, Action map[string]interface{}, Rollback map[string]interface{}, logMessage func(string, string, ...interface{})) (int, error) {
 
 	return 0, nil
+}
+
+func (ms *MigrationSet) CreateMSFiles(mSet *MigrationSet, logMessage func(string, string, ...interface{})) error {
+
+	logMessage("DEBUG", fmt.Sprintf("[MigrationSet]>[Update] Update Release '%s'=>'%s'", mSet.FromRelease, mSet.ToRelease))
+
+	for _, stage := range mSet.Stages {
+		logMessage("DEBUG", fmt.Sprintf("[MigrationSet]>[Update] Start ExecStage for %s", stage.Name))
+		err := stage.ExecStage(stage, mSet, mSet.Atomic, "", logMessage)
+		if err != nil {
+			return nil
+		} else {
+			return err
+		}
+
+	}
+
+	return nil
+}
+
+func (ms *MigrationSet) SetPluginController(pc *plugin.PluginController) error {
+	ms.PluginController = pc
+	return nil
+}
+
+func (ms *MigrationSet) SetMinExecThreads(num int) {
+	MS_MIN_EXEC_THREADS = num
+}
+
+func (ms *MigrationSet) SetMaxExecThreads(num int) {
+	MS_MAX_EXEC_THREADS = num
 }
 
 // UnmarshalYamlFile загружает данные из YAML файла и возвращает объект.
 func unmarshalYamlFile(filePath string, target interface{}) error {
 	yamlData, err := ioutil.ReadFile(filePath)
 	if err != nil {
-		return fmt.Errorf("error reading YAML file: %v", err)
+		return fmt.Errorf("ErrorReadYAML '%s': %v", filePath, err)
 	}
 
 	// Декодируем данные YAML в переданную структуру.
 	err = yaml.Unmarshal(yamlData, target)
 	if err != nil {
-		return fmt.Errorf("error parsing YAML: %v", err)
+		return fmt.Errorf("ErrorParsYAML: %v", err)
 	}
 
 	return nil

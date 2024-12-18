@@ -1,0 +1,16 @@
+{
+  "repos": [
+    {
+      "name": "RoLLeRHub",
+      "description": "This plugin does X and Y",
+      "url": "https://github.com/Ilya-Guyduk/RoLLeRHub/raw/main/index.json",
+      "localIndex": "./repos/RoLLeRHub.json"
+    },
+    {
+      "name": "RoLLeRHubSTL",
+      "description": "This plugin does X and Y",
+      "url": "https://github.com/laplasd/RoLLeRHub/raw/main/index.json",
+      "localIndex": "./repos/RoLLeRHubSTL.json"
+    }
+  ]
+}

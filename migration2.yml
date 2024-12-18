@@ -1,0 +1,16 @@
+msVersion: "0.0.1"
+from_release: "v0.0.1"
+to_release: "v0.0.2"
+stands: "./stands2.yml"
+atomic: true
+stages:
+- name: "test"
+  pre_check:
+  - name: "chech"
+    plugin: "SS Plugin"
+    component:
+      name: "test2"
+    action:
+      command: "pwd" 
+      expected_output: ""
+

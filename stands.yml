@@ -1,6 +1,7 @@
 msVersion: "0.0.1"
 release: "v0.0.1"
 stand:
+- name: "PROD"
   common:
     tags:
       - "production"
@@ -8,7 +9,7 @@ stand:
   include:
     - "./preprod.yml"
     - "./prodlike.yml"
-  name: "PROD"
+
   desc: "Описание стенда"
   components:
   - name: "prod1"

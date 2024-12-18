@@ -10,6 +10,7 @@ require (
 )
 
 require (
+	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/stretchr/testify v1.9.0 // indirect
 	golang.org/x/sys v0.27.0 // indirect
 )
