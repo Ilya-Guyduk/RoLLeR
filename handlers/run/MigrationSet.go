@@ -13,9 +13,9 @@ const (
 )
 
 var (
-	MS_MIN_EXEC_THREADS     int = 1
-	MS_MAX_EXEC_THREADS     int = 100
-	MS_DEFAULT_EXEC_THREADS int = 1
+	DEFAULT_MS_MIN_EXEC_THREADS int = 1
+	DEFAULT_MS_MAX_EXEC_THREADS int = 100
+	DEFAULT_MS_EXEC_THREADS     int = 1
 )
 
 var (
@@ -26,7 +26,13 @@ var (
 	DEFAULT_SUPPORT_ROLLBACK = false
 )
 
-type ActionMap struct {
+// Граф зависимостей
+type DependencyGraph struct {
+	Actions      map[string]Action   // Карта действий
+	Dependencies map[string][]string // Зависимости для каждого действия
+}
+
+type Action struct {
 	Name     string
 	Action   map[string]interface{}
 	Rollback map[string]interface{}
@@ -35,7 +41,7 @@ type ActionMap struct {
 type MigrationSet struct {
 	StandsFile          *StandsFile
 	PluginController    *plugin.PluginController
-	ActionMap           map[int]ActionMap
+	DependencyGraph     *DependencyGraph
 	MigrationSetVersion string   `yaml:"msVersion"`
 	Atomic              *bool    `yaml:"atomic"` // Флаг атомарности
 	YAMLStandFile       string   `yaml:"stands"` // Путь к файлу стендов
@@ -45,7 +51,7 @@ type MigrationSet struct {
 }
 
 // Метод инициализации MigrationSet
-func (mg *MigrationSet) NewMigrationSet(MigrationSetYamlFile string, pc *plugin.PluginController, logMessage func(string, string, ...interface{})) (*MigrationSet, error) {
+func (ms *MigrationSet) NewMigrationSet(MigrationSetYamlFile string, pc *plugin.PluginController, logMessage func(string, string, ...interface{})) (*MigrationSet, error) {
 
 	logMessage("DEBUG", fmt.Sprintf("[MigrationSet]>[New] migration file: %s", MigrationSetYamlFile))
 
@@ -69,7 +75,7 @@ func (mg *MigrationSet) NewMigrationSet(MigrationSetYamlFile string, pc *plugin.
 	newMg := &MigrationSet{
 		StandsFile:          stand,
 		PluginController:    pc,
-		ActionMap:           make(map[int]ActionMap),
+		DependencyGraph:     &DependencyGraph{Actions: make(map[string]Action), Dependencies: make(map[string][]string)},
 		MigrationSetVersion: migrationSet.MigrationSetVersion,
 		Atomic:              migrationSet.Atomic,
 		FromRelease:         migrationSet.FromRelease,
@@ -122,9 +128,6 @@ func (ms *MigrationSet) ValidateMS(mSet MigrationSet) error {
 	if mSet.PluginController == nil {
 		return fmt.Errorf("[MigrationSet]>[Valid] 'PluginController' is empty")
 	}
-	if mSet.ActionMap == nil {
-		return fmt.Errorf("[MigrationSet]>[Valid] 'ActionMap' is empty")
-	}
 	if mSet.MigrationSetVersion == "" {
 		return fmt.Errorf("[MigrationSet]>[Valid] 'msVersion' is empty")
 	}
@@ -146,7 +149,6 @@ func (ms *MigrationSet) UpdateRelease(mSet *MigrationSet, logMessage func(string
 	logMessage("DEBUG", fmt.Sprintf("[MigrationSet]>[Update] Update Release '%s'=>'%s'", mSet.FromRelease, mSet.ToRelease))
 
 	for _, stage := range mSet.Stages {
-		logMessage("DEBUG", fmt.Sprintf("[MigrationSet]>[Update] Start ExecStage for %s", stage.Name))
 		err := stage.ExecStage(stage, mSet, mSet.Atomic, "", logMessage)
 		if err != nil {
 			return nil
@@ -164,9 +166,15 @@ func (ms *MigrationSet) RollbackRelease(targetRelease string, logMessage func(st
 	return nil
 }
 
-func (ms *MigrationSet) PutAction(Name string, Action map[string]interface{}, Rollback map[string]interface{}, logMessage func(string, string, ...interface{})) (int, error) {
+// Метод для добавления действия в граф
+func (ms *MigrationSet) AddActionToGraph(actionName string, action Action, dependencies []string) error {
+	if _, exists := ms.DependencyGraph.Actions[actionName]; exists {
+		return fmt.Errorf("[MigrationSet]>[AddActionToGraph] Action %s already exists", actionName)
+	}
 
-	return 0, nil
+	ms.DependencyGraph.Actions[actionName] = action
+	ms.DependencyGraph.Dependencies[actionName] = dependencies
+	return nil
 }
 
 func (ms *MigrationSet) CreateMSFiles(mSet *MigrationSet, logMessage func(string, string, ...interface{})) error {
@@ -193,11 +201,15 @@ func (ms *MigrationSet) SetPluginController(pc *plugin.PluginController) error {
 }
 
 func (ms *MigrationSet) SetMinExecThreads(num int) {
-	MS_MIN_EXEC_THREADS = num
+	DEFAULT_MS_MIN_EXEC_THREADS = num
 }
 
 func (ms *MigrationSet) SetMaxExecThreads(num int) {
-	MS_MAX_EXEC_THREADS = num
+	DEFAULT_MS_MIN_EXEC_THREADS = num
+}
+
+func (ms *MigrationSet) GetStages() []Stages {
+	return ms.Stages
 }
 
 // UnmarshalYamlFile загружает данные из YAML файла и возвращает объект.

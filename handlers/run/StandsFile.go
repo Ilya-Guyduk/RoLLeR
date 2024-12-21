@@ -9,7 +9,6 @@ import (
 )
 
 type Component struct {
-	Set             *MigrationSet
 	Name            string                 `yaml:"name"`
 	Version         string                 `yaml:"version"`
 	Group           string                 `yaml:"group"` // Имя группы
@@ -18,8 +17,6 @@ type Component struct {
 }
 
 func (c *Component) CheckValideData(component Component, pc *plugin.PluginController, logMessage func(string, string, ...interface{})) error {
-
-	logMessage("DEBUG", fmt.Sprintf("[Component > %s]>[Valid] Start validation", component.Name))
 
 	if component.Version == "" {
 		return fmt.Errorf("[Component > %s]>[Valid] 'version' is empty", component.Name)
@@ -32,10 +29,14 @@ func (c *Component) CheckValideData(component Component, pc *plugin.PluginContro
 		return fmt.Errorf("[Component > %s]>[Valid] 'config' is empty", component.Name)
 	}
 
-	logMessage("DEBUG", fmt.Sprintf("[Component > %s]>[Valid] Check executor in ExecutorPluginRegistry...", component.Name))
+	logMessage("DEBUG", fmt.Sprintf("[Component > %s]>[Valid] Check executor...", component.Name))
 	executor, ok := pc.ExecutorPluginRegistry[component.Plugin]
 	if !ok {
-		return fmt.Errorf("'component.Plugin' плагин для типа '%s' не найден", component.Plugin)
+		logMessage("ERROR", fmt.Sprintf("[Component:'%s'] 'Component.Plugin' плагин для типа '%s' не найден", component.Name, component.Plugin))
+		err := pc.InstallPlugin(component.Plugin)
+		if err != nil {
+			return err
+		}
 	}
 	info, _ := executor.GetInfo()
 	logMessage("DEBUG", fmt.Sprintf("[Component > %s]>[Valid] Get component for Plugin: %s, componentConfig: %s", component.Name, info, component.ComponentConfig))
@@ -68,13 +69,11 @@ type Stand struct {
 	Component   []Component `yaml:"components"`
 }
 
-func (s *Stand) CheckValideData(stand Stand, pc *plugin.PluginController, logMessage func(string, string, ...interface{})) error {
+func (s *Stand) CascadeValidation(stand Stand, pc *plugin.PluginController, logMessage func(string, string, ...interface{})) error {
 
-	if stand.Name == "" {
-		return fmt.Errorf("[Stand > %s]>[Valid] 'name' is empty", stand.Name)
-	}
-	if len(stand.Component) == 0 {
-		return fmt.Errorf("[Stand > %s]>[Valid] 'components' is empty", stand.Name)
+	validErr := s.ValidateS(stand)
+	if validErr != nil {
+		return validErr
 	}
 
 	// Проверка уникальности имен компонентов
@@ -91,7 +90,6 @@ func (s *Stand) CheckValideData(stand Stand, pc *plugin.PluginController, logMes
 		}
 		nameSet[component.Name] = true
 
-		logMessage("DEBUG", fmt.Sprintf("[Stand > %s]>[Valid] Starting validation for component %s...", stand.Name, component.Name))
 		// Проверяем остальные данные компонента
 		componentErr := component.CheckValideData(component, pc, logMessage)
 		if componentErr != nil {
@@ -105,6 +103,17 @@ func (s *Stand) CheckValideData(stand Stand, pc *plugin.PluginController, logMes
 	}
 
 	logMessage("DEBUG", fmt.Sprintf("[Stand > %s]>[Valid] Validation finish!", stand.Name))
+	return nil
+}
+
+func (s *Stand) ValidateS(stand Stand) error {
+
+	if stand.Name == "" {
+		return fmt.Errorf("[stand]>[Valid] 'name' is empty")
+	}
+	if len(stand.Component) == 0 {
+		return fmt.Errorf("[StandsFile]>[Valid] 'stand' is empty")
+	}
 	return nil
 }
 
@@ -184,8 +193,7 @@ func (sf *StandsFile) CascadeValidation(standsFile StandsFile, pc *plugin.Plugin
 	}
 
 	for _, stand := range standsFile.Stand {
-		logMessage("DEBUG", fmt.Sprintf("[StandsFile]>[Valid] Starting validation 'Stand' '%s'", stand.Name))
-		standErr := stand.CheckValideData(stand, pc, logMessage)
+		standErr := stand.CascadeValidation(stand, pc, logMessage)
 		if standErr != nil {
 			return standErr
 		}

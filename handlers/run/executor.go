@@ -7,7 +7,7 @@ import (
 	//"plugin"
 
 	"github.com/Ilya-Guyduk/RoLLeR/handlers/plugin"
-	v1 "github.com/Ilya-Guyduk/RoLLeR/pei/v1"
+	v1 "github.com/laplasd/roller-epi/v1"
 )
 
 type Check struct {
@@ -26,6 +26,7 @@ func (c *Check) CascadeValidation(check Check, pc *plugin.PluginController, stan
 
 	var pluginCheck v1.Check
 	var pluginComponent v1.Component
+	var err error
 
 	ctx := context.TODO()
 
@@ -43,10 +44,10 @@ func (c *Check) CascadeValidation(check Check, pc *plugin.PluginController, stan
 	}
 
 	logMessage("DEBUG", fmt.Sprintf("[Check:'%s'] GetCheck object for %s", check.Name, check.PluginType))
-	if pluginCheck, err := executor.GetCheck(check.Actions); err == nil {
+	if pluginCheck, err = executor.GetCheck(check.Actions); err == nil {
 
 		logMessage("DEBUG", fmt.Sprintf("[Check:'%s'] Validate Check object for %s", check.Name, check.PluginType))
-		if err := executor.ValidateYAMLCheck(ctx, pluginCheck); err != nil {
+		if err = executor.ValidateYAMLCheck(ctx, pluginCheck); err != nil {
 
 			return nil, nil, fmt.Errorf("ошибка валидации данных: %v", err)
 		} else {
@@ -64,7 +65,7 @@ func (c *Check) CascadeValidation(check Check, pc *plugin.PluginController, stan
 	}
 
 	logMessage("DEBUG", fmt.Sprintf("[Check:'%s'] GetComponent for Check for %s, componentConfig: %s", check.Name, check.PluginType, componentConfig))
-	if pluginComponent, err := executor.GetComponent(componentConfig); err == nil {
+	if pluginComponent, err = executor.GetComponent(componentConfig); err == nil {
 
 		logMessage("DEBUG", fmt.Sprintf("[Check:'%s'] Validate Component object for %s, pluginComponent: %s", check.Name, check.PluginType, pluginComponent))
 		componentErr := executor.ValidateYAMLComponent(pluginComponent)
@@ -118,7 +119,7 @@ func (c *Check) ExecCheck(check Check, stageName string, pc *plugin.PluginContro
 	if err != nil {
 		return err
 	} else {
-		checkCode, err := executor.ExecCheck(ctx, v1Compomemt, v1Check)
+		checkCode, err := executor.ExecCheck(ctx, *v1Compomemt, *v1Check)
 		if err == nil {
 			if !checkCode {
 				logMessage("ERROR", "checkCode is False")
@@ -131,7 +132,6 @@ func (c *Check) ExecCheck(check Check, stageName string, pc *plugin.PluginContro
 }
 
 type Script struct {
-	Set        *MigrationSet
 	Name       string                 `yaml:"name"`
 	PluginType string                 `yaml:"plugin"`
 	Actions    map[string]interface{} `yaml:"action"`
@@ -145,37 +145,38 @@ func (s *Script) CascadeValidation(script Script, pc *plugin.PluginController, s
 		return nil, nil, validErr
 	}
 
-	logMessage("DEBUG", fmt.Sprintf("[Check:'%s'] Start valitation", script.Name))
-
 	var pluginAction v1.Action
 	var pluginComponent v1.Component
+	var err error
 
 	ctx := context.TODO()
 
 	logMessage("DEBUG", fmt.Sprintf("[Script:'%s'] Check executor for '%s'", script.Name, script.PluginType))
 	executor, ok := pc.ExecutorPluginRegistry[script.PluginType]
 	if !ok {
-		logMessage("ERROR", fmt.Sprintf("[Script:'%s'] 'Script.Plugin' плагин для типа '%s' не найден", script.Name, script.PluginType))
-		err := pc.InstallPlugin(script.PluginType)
+		logMessage("ERROR", fmt.Sprintf("[Script:'%s'] 'Script.Plugin' плагин для типа '%s' не найден. Попытка установки", script.Name, script.PluginType))
+		err = pc.InstallPlugin(script.PluginType)
 		if err != nil {
-			return nil, nil, nil
+			return nil, nil, err
 		}
 	} else {
 		info, _ := executor.GetInfo()
-		logMessage("DEBUG", fmt.Sprintf("[Script:'%s'] Executor object for '%s': %s", script.Name, script.PluginType, info))
+		logMessage("DEBUG", fmt.Sprintf("[Script:'%s'] Executor for '%s': %s", script.Name, script.PluginType, info))
 	}
 
 	logMessage("DEBUG", fmt.Sprintf("[Script:'%s'] GetCheck object for %s", script.Name, script.PluginType))
-	if pluginCheck, err := executor.GetCheck(script.Actions); err == nil {
+	if pluginAction, err = executor.GetAction(script.Actions); err == nil {
 
-		logMessage("DEBUG", fmt.Sprintf("[Script:'%s'] Validate Check object for %s", script.Name, script.PluginType))
-		if err := executor.ValidateYAMLCheck(ctx, pluginCheck); err != nil {
+		logMessage("DEBUG", fmt.Sprintf("[Script:'%s'] Validate Script object for %s", script.Name, script.PluginType))
+		if err = executor.ValidateYAMLAction(ctx, pluginAction); err != nil {
 
 			return nil, nil, fmt.Errorf("ошибка валидации данных: %v", err)
 		} else {
 
-			logMessage("INFO", fmt.Sprintf("[Script:'%s'] Validate Check for '%s' succes!", script.Name, script.PluginType))
+			logMessage("INFO", fmt.Sprintf("[Script:'%s'] Validate Script for '%s' succes!", script.Name, script.PluginType))
 		}
+	} else {
+		return nil, nil, err
 	}
 
 	logMessage("DEBUG", fmt.Sprintf("[Script:'%s'] Find component for %s", script.Name, script.PluginType))
@@ -187,7 +188,7 @@ func (s *Script) CascadeValidation(script Script, pc *plugin.PluginController, s
 	}
 
 	logMessage("DEBUG", fmt.Sprintf("[Script:'%s'] GetComponent for Check for %s, componentConfig: %s", script.Name, script.PluginType, componentConfig))
-	if pluginComponent, err := executor.GetComponent(componentConfig); err == nil {
+	if pluginComponent, err = executor.GetComponent(componentConfig); err == nil {
 
 		logMessage("DEBUG", fmt.Sprintf("[Script:'%s'] Validate Component object for %s, pluginComponent: %s", script.Name, script.PluginType, pluginComponent))
 		componentErr := executor.ValidateYAMLComponent(pluginComponent)
@@ -220,7 +221,6 @@ func (s *Script) ValidateSC(script Script) error {
 
 func (s *Script) ExecScript(script Script, stageName string, pc *plugin.PluginController, stands *StandsFile, logMessage func(string, string, ...interface{})) error {
 
-	logMessage("INFO", fmt.Sprintf("[Script > %s] Start ExecCheck", script.Name))
 	ctx := context.Background()
 
 	logMessage("DEBUG", fmt.Sprintf("[Script > %s] Check executor", script.Name))
@@ -230,8 +230,8 @@ func (s *Script) ExecScript(script Script, stageName string, pc *plugin.PluginCo
 	} else {
 		pluginInfo, err := executor.GetInfo()
 		if err == nil {
-			logMessage("INFO", fmt.Sprintf("[Check > %s] Plugin: '%s'. Version: %s", script.Name, pluginInfo.Name, pluginInfo.Version))
-			logMessage("DEBUG", fmt.Sprintf("[Check > %s] Plugin: '%s'. Desc: %s", script.Name, pluginInfo.Name, pluginInfo.Description))
+			logMessage("INFO", fmt.Sprintf("[Script > %s] Plugin: '%s'. Version: %s", script.Name, pluginInfo.Name, pluginInfo.Version))
+			logMessage("DEBUG", fmt.Sprintf("[Script > %s] Plugin: '%s'. Desc: %s", script.Name, pluginInfo.Name, pluginInfo.Description))
 		} else {
 			return err
 		}
@@ -241,12 +241,8 @@ func (s *Script) ExecScript(script Script, stageName string, pc *plugin.PluginCo
 	if err != nil {
 		return err
 	} else {
-		checkCode, err := executor.ExecCheck(ctx, v1Compomemt, v1Action)
-		if err == nil {
-			if !checkCode {
-				logMessage("ERROR", "checkCode is False")
-			}
-		} else {
+		err := executor.ExecAction(ctx, *v1Compomemt, *v1Action)
+		if err != nil {
 			return err
 		}
 	}
@@ -254,51 +250,119 @@ func (s *Script) ExecScript(script Script, stageName string, pc *plugin.PluginCo
 }
 
 type Task struct {
-	Set        *MigrationSet
 	Name       string                 `yaml:"name"`
 	PluginType string                 `yaml:"plugin"`
 	Actions    map[string]interface{} `yaml:"action"`
 	Component  map[string]interface{} `yaml:"component"`
 }
 
-func (t *Task) ExecTask(task Task, stageName string, pc *plugin.PluginController, stands *StandsFile, logMessage func(string, string, ...interface{})) error {
+func (t *Task) CascadeValidation(task Task, pc *plugin.PluginController, stands StandsFile, logMessage func(string, string, ...interface{})) (*v1.Action, *v1.Component, error) {
 
-	logMessage("INFO", fmt.Sprintf("[Check > %s] Start ExecCheck", task.Name))
+	validErr := t.ValidateT(task)
+	if validErr != nil {
+		return nil, nil, validErr
+	}
+
+	var pluginAction v1.Action
+	var pluginComponent v1.Component
+	var err error
+
+	ctx := context.TODO()
+
+	logMessage("DEBUG", fmt.Sprintf("[Task:'%s'] Check executor for '%s'", task.Name, task.PluginType))
+	executor, ok := pc.ExecutorPluginRegistry[task.PluginType]
+	if !ok {
+		logMessage("ERROR", fmt.Sprintf("[Task:'%s'] 'Task.Plugin' плагин для типа '%s' не найден", task.Name, task.PluginType))
+		err = pc.InstallPlugin(task.PluginType)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		info, _ := executor.GetInfo()
+		logMessage("DEBUG", fmt.Sprintf("[Task:'%s'] Executor object for '%s': %s", task.Name, task.PluginType, info))
+	}
+
+	logMessage("DEBUG", fmt.Sprintf("[Task:'%s'] GetAction object for %s", task.Name, task.PluginType))
+	if pluginAction, err = executor.GetAction(task.Actions); err == nil {
+
+		logMessage("DEBUG", fmt.Sprintf("[Task:'%s'] Validate Action object for %s", task.Name, task.PluginType))
+		if err := executor.ValidateYAMLAction(ctx, pluginAction); err != nil {
+
+			return nil, nil, fmt.Errorf("ошибка валидации данных: %v", err)
+		} else {
+
+			logMessage("DEBUG", fmt.Sprintf("[Task:'%s'] Validate Action for '%s' succes!", task.Name, task.PluginType))
+		}
+	} else {
+		return nil, nil, err
+	}
+
+	logMessage("DEBUG", fmt.Sprintf("[Task:'%s'] Find component for %s", task.Name, task.PluginType))
+	logMessage("DEBUG", fmt.Sprintf("[Task:'%s'] Component %s", task.Name, task.Component))
+	componentConfig, err := stands.FindComponent(task.Component, logMessage)
+	if err != nil {
+
+		return nil, nil, err
+	}
+
+	logMessage("DEBUG", fmt.Sprintf("[Task:'%s'] GetComponent for Action for %s, componentConfig: %s", task.Name, task.PluginType, componentConfig))
+	if pluginComponent, err = executor.GetComponent(componentConfig); err == nil {
+
+		logMessage("DEBUG", fmt.Sprintf("[Task:'%s'] Validate Component object for %s, pluginComponent: %s", task.Name, task.PluginType, pluginComponent))
+		componentErr := executor.ValidateYAMLComponent(pluginComponent)
+		if componentErr != nil {
+
+			return nil, nil, fmt.Errorf(" [Task:'%s']'executor.ValidateYAMLComponent' ERROR '%s'", task.Name, err)
+		}
+	} else {
+		return nil, nil, fmt.Errorf(" [Task:'%s']'executor.GetComponent' ERROR '%s'", task.Name, err)
+	}
+	logMessage("DEBUG", fmt.Sprintf("[Task:'%s'] valitation Finish!", task.Name))
+
+	return &pluginAction, &pluginComponent, nil
+}
+
+func (t *Task) ValidateT(task Task) error {
+
+	if task.PluginType == "" {
+		return fmt.Errorf("[Task:'%s'] 'plugin' is empty", task.Name)
+	}
+	if task.Component == nil {
+		return fmt.Errorf("[Task:'%s'] 'component' is empty", task.Name)
+	}
+	if task.Actions == nil {
+		return fmt.Errorf("[Task:'%s'] 'actions' is empty", task.Name)
+	}
+
+	return nil
+}
+
+func (t *Task) ExecTask(task Task, stageName string, pc *plugin.PluginController, stands *StandsFile, logMessage func(string, string, ...interface{})) error {
 
 	ctx := context.Background()
 
-	logMessage("DEBUG", fmt.Sprintf("[Check > %s] Check executor", task.Name))
+	logMessage("DEBUG", fmt.Sprintf("[Task > %s] Check executor", task.Name))
 	executor, ok := pc.ExecutorPluginRegistry[task.PluginType]
 	if !ok {
-		return fmt.Errorf("'Check.Plugin' плагин для типа '%s' не найден", task.PluginType)
+		return fmt.Errorf("'Task.Plugin' плагин для типа '%s' не найден", task.PluginType)
 	} else {
 		pluginInfo, err := executor.GetInfo()
 		if err == nil {
-			logMessage("INFO", fmt.Sprintf("[Check > %s] Plugin: '%s'. Version: %s", task.Name, pluginInfo.Name, pluginInfo.Version))
-			logMessage("DEBUG", fmt.Sprintf("[Check > %s] Plugin: '%s'. Desc: %s", task.Name, pluginInfo.Name, pluginInfo.Description))
+			logMessage("INFO", fmt.Sprintf("[Task > %s] Plugin: '%s'. Version: %s", task.Name, pluginInfo.Name, pluginInfo.Version))
+			logMessage("DEBUG", fmt.Sprintf("[Task > %s] Plugin: '%s'. Desc: %s", task.Name, pluginInfo.Name, pluginInfo.Description))
 		} else {
 			return err
 		}
 	}
 
-	v1Check, v1Compomemt, err := task.CheckValideData(task, pc, *stands, logMessage)
+	v1Action, v1Compomemt, err := task.CascadeValidation(task, pc, *stands, logMessage)
 	if err != nil {
 		return err
 	} else {
-		checkCode, err := executor.ExecCheck(ctx, v1Compomemt, v1Check)
+		err := executor.ExecAction(ctx, *v1Compomemt, *v1Action)
 		if err != nil {
-			if !checkCode {
-				logMessage("ERROR", "checkCode is False")
-			}
-			return nil
-		} else {
-			return fmt.Errorf("'ExecCheck' ERROR: %s", err)
+			return err
 		}
 	}
-
-}
-
-func (t *Task) CheckValideData(task Task, pc *plugin.PluginController, stands StandsFile, logMessage func(string, string, ...interface{})) (*v1.Check, *v1.Component, error) {
-
-	return nil, nil, nil
+	return nil
 }

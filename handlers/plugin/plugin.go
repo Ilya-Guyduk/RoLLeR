@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	v1 "github.com/Ilya-Guyduk/RoLLeR/pei/v1"
+	v1 "github.com/laplasd/roller-epi/v1"
 )
 
 const (
@@ -74,6 +74,7 @@ func (pc *PluginController) NewPluginController(pluginsPath string, repoPath str
 	if err != nil {
 		return nil, err
 	}
+
 	rootIndexPath := filepath.Join(repoPath, ROOT_INDEX_FILE_NAME)
 	// Создаем новый экземпляр MigrationSet с заполненными данными.
 	newPC := &PluginController{

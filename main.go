@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 
 	"github.com/Ilya-Guyduk/RoLLeR/handlers/inits"
@@ -65,8 +66,7 @@ func initerCommandParser(args []string) error {
 func runnerCommandParser(args []string) error {
 
 	if len(args) < 1 {
-		fmt.Println("Please specify a plugin command (e.g., install, search)")
-		os.Exit(1)
+		log.Fatal("Please specify a plugin command (e.g., install, search)")
 	}
 
 	// Инициализация флагов
@@ -135,18 +135,26 @@ func setupRunnerFlags() (*flag.FlagSet, *string, *string, *string) {
 }
 
 func pluginCommandParser(args []string) error {
-
 	if len(args) < 1 {
-		fmt.Println("Please specify a plugin command (e.g., install, search)")
-		os.Exit(1)
+		log.Fatal("Please specify a plugin command (e.g., install, search)")
 	}
 
-	installCmd, _, searchPlugin, _, _, _, _, _, config := setupPluginFlags()
+	installCmd := flag.NewFlagSet("plugin", flag.ExitOnError)
+	pluginName := installCmd.String("plugin", "", "plugin to install")
+	config := installCmd.String("config", DEFAULT_CONFIG_PATH, "plugin to install")
+
+	// Разбор флагов
 	if err := installCmd.Parse(args); err != nil {
-		fmt.Println("Error parsing flags: %w", err)
+		fmt.Printf("Error parsing flags: %v\n", err)
 		os.Exit(1)
 	}
 
+	if *pluginName == "" {
+		fmt.Println("Please specify a plugin to search using --plugin flag")
+		os.Exit(1)
+	}
+
+	// Инициализация конфигурации
 	rollerConfig, err := initConfig(*config)
 	if err != nil {
 		return err
@@ -164,35 +172,17 @@ func pluginCommandParser(args []string) error {
 
 	switch args[0] {
 	case "install":
-		logMessage("INFO", "Install...")
-
-		installPlugin := installCmd.String("plugin", "", "plugin to install")
-		installRepoURL := installCmd.String("repo", "", "plugin to install")
-		installCmd.Parse(args)
-
-		if *installRepoURL != "" {
-			fmt.Printf("INFO: Installing repo: %s\n", *installRepoURL)
-			installErr := pc.AddRepo(*installPlugin)
-			if installErr != nil {
-				fmt.Println(installErr)
-			}
-		} else if *installPlugin != "" {
-			fmt.Printf("INFO: Installing plugin: %s\n", *installPlugin)
-			installErr := pc.InstallPlugin(*installPlugin)
-			if installErr != nil {
-				fmt.Println(installErr)
-			}
-		} else {
-			fmt.Println("Please specify a plugin to install using --plugin flag")
-			os.Exit(1)
+		fmt.Printf("INFO: Installing plugin: %s\n", *pluginName)
+		installErr := pc.InstallPlugin(*pluginName)
+		if installErr != nil {
+			fmt.Println(installErr)
 		}
 
 	case "search":
-		logMessage("INFO", "Search...")
 
-		fmt.Printf("INFO: Searching for plugin: %s in %s\n", *searchPlugin, rollerConfig.Global.Plugin.DefaultRepo)
+		fmt.Printf("INFO: Searching for plugin: %s in %s\n", *pluginName, rollerConfig.Global.Plugin.DefaultRepo)
 
-		PluginName, pluginVersion, pluginDescription, pluginURL, searchErr := pc.SearchPlugin(*searchPlugin, rollerConfig.Global.Plugin.DefaultRepo)
+		PluginName, pluginVersion, pluginDescription, pluginURL, searchErr := pc.SearchPlugin(*pluginName, rollerConfig.Global.Plugin.DefaultRepo)
 		if searchErr != nil {
 			logMessage("ERROR", "%s", searchErr)
 		} else {
@@ -202,26 +192,13 @@ func pluginCommandParser(args []string) error {
 			fmt.Printf("  Description: %s\n", pluginDescription)
 			fmt.Printf("  URL: %s\n", pluginURL)
 		}
+	case "delete":
+
 	default:
 		fmt.Printf("Unknown command: %s\n", args[0])
 		os.Exit(1)
 	}
 	return nil
-}
-
-func setupPluginFlags() (*flag.FlagSet, *string, *string, *string, *string, *string, *string, *string, *string) {
-	installCmd := flag.NewFlagSet("plugin", flag.ExitOnError)
-	installPlugin := installCmd.String("install", "", "plugin to install")
-	searchPlugin := installCmd.String("search", "", "plugin to install")
-	deletePlugin := installCmd.String("delete", "", "plugin to install")
-	installRepoURL := installCmd.String("repo", DEFAULT_REPO_DIR, "plugin to install")
-
-	addRepo := installCmd.String("add-repo", "", "plugin to install")
-	removeRepo := installCmd.String("remove-repo", "", "plugin to install")
-	disableRepo := installCmd.String("disable-repo", "", "plugin to install")
-
-	config := installCmd.String("config", DEFAULT_CONFIG_PATH, "plugin to install")
-	return installCmd, installPlugin, searchPlugin, deletePlugin, installRepoURL, addRepo, removeRepo, disableRepo, config
 }
 
 func main() {

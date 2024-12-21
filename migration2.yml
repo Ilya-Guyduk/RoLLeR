@@ -5,9 +5,9 @@ stands: "./stands2.yml"
 atomic: true
 stages:
 - name: "test"
-  pre_check:
+  task:
   - name: "chech"
-    plugin: "SS Plugin"
+    plugin: "SSH Plugin"
     component:
       name: "test2"
     action:

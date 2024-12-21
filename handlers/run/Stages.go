@@ -221,36 +221,34 @@ func (s *Stages) ExecStage(stage Stages, ms *MigrationSet, parentAtomic *bool, p
 	}
 
 	// Проверяем и вычисляем атомарность этапа
-	logMessage("DEBUG", fmt.Sprintf("[Stage > %s] Check Atomic", stageName))
 	MY_ATOMIC_STAGE := stage.CheckMyAtomic(stageName, stage.Atomic, parentAtomic, logMessage)
 
 	// Шаг 1: Выполняем PreCheck, если он указан
 	if stage.PreCheck != nil {
 
-		logMessage("INFO", fmt.Sprintf("[Stage > %s] Start ExecCheck", stageName))
 		for _, PreCheck := range stage.PreCheck {
 
 			if err := PreCheck.ExecCheck(PreCheck, stageName, ms.PluginController, ms.StandsFile, logMessage); err != nil {
 
-				logMessage("ERROR", fmt.Sprintf("[%s] PreCheck failed: %v", stageName, err))
+				logMessage("ERROR", fmt.Sprintf("[Stage > %s] PreCheck failed: %v", stageName, err))
 				return err
 
 			} else {
 
-				_, err := ms.PutAction(PreCheck.Name, PreCheck.Actions, PreCheck.Component, logMessage)
-				if err != nil {
-					return nil
-				}
+				//err := ms.AddActionToGraph(PreCheck.Name, ms.Action, []PreCheck.Actions)
+				//if err != nil {
+				//	return nil
+				//}
 			}
 		}
 	}
 
 	// Шаг 2: Выполняем PreScript, если он указан
 	if stage.PreScript != nil {
-		logMessage("INFO", fmt.Sprintf("[%s] Executing PreScript...", stageName))
+
 		for _, PreScript := range stage.PreScript {
 			if err := PreScript.ExecScript(PreScript, stageName, ms.PluginController, ms.StandsFile, logMessage); err != nil {
-				logMessage("ERROR", fmt.Sprintf("[%s] PreScript failed: %v", stageName, err))
+				logMessage("ERROR", fmt.Sprintf("[Stage > %s] PreScript failed: %v", stageName, err))
 				if *MY_ATOMIC_STAGE {
 					return err
 				}
@@ -260,9 +258,9 @@ func (s *Stages) ExecStage(stage Stages, ms *MigrationSet, parentAtomic *bool, p
 
 	// Шаг 3: Выполняем вложенные этапы, если они есть
 	for _, subStage := range stage.Stages {
-		logMessage("INFO", fmt.Sprintf("[%s] Processing sub-stage: %s", stageName, subStage.Name))
+		logMessage("INFO", fmt.Sprintf("[Stage > %s] Processing sub-stage: %s", stageName, subStage.Name))
 		if err := s.ExecStage(subStage, ms, MY_ATOMIC_STAGE, stageName, logMessage); err != nil {
-			logMessage("ERROR", fmt.Sprintf("[%s] Sub-stage %s failed: %v", stageName, subStage.Name, err))
+			logMessage("ERROR", fmt.Sprintf("[Stage > %s] Sub-stage %s failed: %v", stageName, subStage.Name, err))
 			if *MY_ATOMIC_STAGE {
 				return err
 			}
@@ -273,7 +271,7 @@ func (s *Stages) ExecStage(stage Stages, ms *MigrationSet, parentAtomic *bool, p
 	for _, task := range stage.Task {
 		logMessage("INFO", fmt.Sprintf("[Stage > %s] Executing Task...", stageName))
 		if err := task.ExecTask(task, stageName, ms.PluginController, ms.StandsFile, logMessage); err != nil {
-			logMessage("ERROR", fmt.Sprintf("[%s] Task failed: %v", stageName, err))
+			logMessage("ERROR", fmt.Sprintf("[Stage > %s] Task failed: %v", stageName, err))
 			if *MY_ATOMIC_STAGE {
 				return err
 			}
